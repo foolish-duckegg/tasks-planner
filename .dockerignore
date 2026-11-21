@@ -1,0 +1,16 @@
+.git
+.gitignore
+.github
+**/__pycache__
+**/*.py[cod]
+**/.venv
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+frontend/node_modules
+frontend/dist
+backend/app/static
+data
+data.bak-*
+release
+*.log

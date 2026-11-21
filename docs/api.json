@@ -1,0 +1,5056 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "tasks-planner API",
+    "description": "本地任务与时间规划服务。\n\n约定：时间点使用距离 00:00 的分钟数（0..1440），区间为左闭右开；日期使用 YYYY-MM-DD；时间戳以 UTC 存储，响应时按 app_meta.timezone 转为本地时间。删除均为软删除。",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "健康检查",
+        "description": "服务存活时返回 ok 与当前版本。",
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Api Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/meta": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "获取元信息",
+        "description": "返回 app_meta 中的所有键值，如 schema_version、timezone、week_start。",
+        "operationId": "get_meta_api_meta_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Get Meta Api Meta Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/meta/{key}": {
+      "put": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "写入元信息",
+        "description": "key 不存在时创建，存在时覆盖。timezone 必须是 IANA 时区名（如 Asia/Shanghai）；week_start 为 1..7。",
+        "operationId": "put_meta_api_meta__key__put",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MetaValueUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Put Meta Api Meta  Key  Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/statuses": {
+      "get": {
+        "tags": [
+          "task-statuses"
+        ],
+        "summary": "列出任务状态",
+        "description": "返回任务状态表，按 sort_order、id 排序。默认不返回软删除记录，include_deleted=true 可查看。",
+        "operationId": "list_statuses_api_statuses_get",
+        "parameters": [
+          {
+            "name": "active_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "只返回启用状态",
+              "default": false,
+              "title": "Active Only"
+            },
+            "description": "只返回启用状态"
+          },
+          {
+            "name": "include_deleted",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "包含软删除状态",
+              "default": false,
+              "title": "Include Deleted"
+            },
+            "description": "包含软删除状态"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TaskStatusOut"
+                  },
+                  "title": "Response List Statuses Api Statuses Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "task-statuses"
+        ],
+        "summary": "新建任务状态",
+        "description": "code 在未删除记录中必须唯一，创建后不可修改。",
+        "operationId": "create_status_api_statuses_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskStatusCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskStatusOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "code 已存在"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/statuses/{status_id}": {
+      "get": {
+        "tags": [
+          "task-statuses"
+        ],
+        "summary": "获取任务状态",
+        "operationId": "get_status_api_statuses__status_id__get",
+        "parameters": [
+          {
+            "name": "status_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Status Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskStatusOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "状态不存在或已删除"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "task-statuses"
+        ],
+        "summary": "更新任务状态",
+        "description": "只更新传入的字段；code 不可修改；已软删除的状态不可更新。",
+        "operationId": "update_status_api_statuses__status_id__patch",
+        "parameters": [
+          {
+            "name": "status_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Status Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskStatusUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskStatusOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "状态不存在或已删除"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "task-statuses"
+        ],
+        "summary": "软删除任务状态",
+        "description": "内置状态不可删除（请用 is_active 停用）；自定义状态只写入 deleted_at。",
+        "operationId": "delete_status_api_statuses__status_id__delete",
+        "parameters": [
+          {
+            "name": "status_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Status Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "状态不存在"
+          },
+          "409": {
+            "description": "内置状态不可删除"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/statuses/{status_id}/restore": {
+      "post": {
+        "tags": [
+          "task-statuses"
+        ],
+        "summary": "恢复任务状态",
+        "description": "把 deleted_at 置空；code 冲突时返回 409。",
+        "operationId": "restore_status_api_statuses__status_id__restore_post",
+        "parameters": [
+          {
+            "name": "status_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Status Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskStatusOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "状态不存在"
+          },
+          "409": {
+            "description": "code 已被占用"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/priorities": {
+      "get": {
+        "tags": [
+          "priority-levels"
+        ],
+        "summary": "列出优先级",
+        "description": "按 level 升序返回，level=1 最高。默认不返回软删除记录，include_deleted=true 可查看。",
+        "operationId": "list_priorities_api_priorities_get",
+        "parameters": [
+          {
+            "name": "active_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "只返回启用优先级",
+              "default": false,
+              "title": "Active Only"
+            },
+            "description": "只返回启用优先级"
+          },
+          {
+            "name": "include_deleted",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "包含软删除优先级",
+              "default": false,
+              "title": "Include Deleted"
+            },
+            "description": "包含软删除优先级"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PriorityLevelOut"
+                  },
+                  "title": "Response List Priorities Api Priorities Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "priority-levels"
+        ],
+        "summary": "新建优先级",
+        "description": "level 在未删除记录中必须唯一，1 表示最高优先级。",
+        "operationId": "create_priority_api_priorities_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriorityLevelCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriorityLevelOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "level 已存在"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/priorities/{priority_id}": {
+      "get": {
+        "tags": [
+          "priority-levels"
+        ],
+        "summary": "获取优先级",
+        "operationId": "get_priority_api_priorities__priority_id__get",
+        "parameters": [
+          {
+            "name": "priority_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Priority Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriorityLevelOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "优先级不存在或已删除"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "priority-levels"
+        ],
+        "summary": "更新优先级",
+        "description": "只更新传入的字段；level 在未删除记录中冲突会返回 409。",
+        "operationId": "update_priority_api_priorities__priority_id__patch",
+        "parameters": [
+          {
+            "name": "priority_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Priority Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriorityLevelUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriorityLevelOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "优先级不存在或已删除"
+          },
+          "409": {
+            "description": "level 已存在"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "priority-levels"
+        ],
+        "summary": "软删除优先级",
+        "description": "只写入 deleted_at，任务上的历史引用保留。",
+        "operationId": "delete_priority_api_priorities__priority_id__delete",
+        "parameters": [
+          {
+            "name": "priority_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Priority Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "优先级不存在"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/priorities/{priority_id}/restore": {
+      "post": {
+        "tags": [
+          "priority-levels"
+        ],
+        "summary": "恢复优先级",
+        "description": "把 deleted_at 置空；level 冲突时返回 409。",
+        "operationId": "restore_priority_api_priorities__priority_id__restore_post",
+        "parameters": [
+          {
+            "name": "priority_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Priority Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriorityLevelOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "优先级不存在"
+          },
+          "409": {
+            "description": "level 已被占用"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks": {
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "列出任务",
+        "description": "按优先级、截止时间排序（无截止时间排最后）。status_code 传状态 code，如 todo、doing、blocked，可重复传多个（OR 关系）。priority_level_id 同样可重复传多个（OR 关系）。默认不返回软删除任务，include_deleted=true 可查看。",
+        "operationId": "list_tasks_api_tasks_get",
+        "parameters": [
+          {
+            "name": "status_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "状态 code，可重复传多个（OR 关系），如 todo",
+              "title": "Status Code"
+            },
+            "description": "状态 code，可重复传多个（OR 关系），如 todo"
+          },
+          {
+            "name": "priority_level_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "优先级 ID，可重复传多个（OR 关系）",
+              "title": "Priority Level Id"
+            },
+            "description": "优先级 ID，可重复传多个（OR 关系）"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "搜索标题、进度、备注",
+              "title": "Q"
+            },
+            "description": "搜索标题、进度、备注"
+          },
+          {
+            "name": "deadline_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "截止时间下限，ISO 8601",
+              "title": "Deadline From"
+            },
+            "description": "截止时间下限，ISO 8601"
+          },
+          {
+            "name": "deadline_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "截止时间上限，ISO 8601",
+              "title": "Deadline To"
+            },
+            "description": "截止时间上限，ISO 8601"
+          },
+          {
+            "name": "include_deleted",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "包含软删除任务",
+              "default": false,
+              "title": "Include Deleted"
+            },
+            "description": "包含软删除任务"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "description": "返回条数",
+              "default": 100,
+              "title": "Limit"
+            },
+            "description": "返回条数"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "偏移量",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "偏移量"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TaskOut"
+                  },
+                  "title": "Response List Tasks Api Tasks Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "新建任务",
+        "description": "创建任务；状态为 done（内置 id=4）时自动写入 completed_at。",
+        "operationId": "create_task_api_tasks_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "状态或优先级不存在"
+          }
+        }
+      }
+    },
+    "/api/tasks/unscheduled": {
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "列出未排期任务",
+        "description": "未排期任务指没有任何未删除任务排期的任务，与任务状态无关。默认排除已完成、已取消的任务，支持优先级、关键词和截止时间筛选。",
+        "operationId": "list_unscheduled_tasks_api_tasks_unscheduled_get",
+        "parameters": [
+          {
+            "name": "priority_level_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "优先级 ID，可重复传多个（OR 关系）",
+              "title": "Priority Level Id"
+            },
+            "description": "优先级 ID，可重复传多个（OR 关系）"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "搜索标题、进度、备注",
+              "title": "Q"
+            },
+            "description": "搜索标题、进度、备注"
+          },
+          {
+            "name": "deadline_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "截止时间下限，ISO 8601",
+              "title": "Deadline From"
+            },
+            "description": "截止时间下限，ISO 8601"
+          },
+          {
+            "name": "deadline_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "截止时间上限，ISO 8601",
+              "title": "Deadline To"
+            },
+            "description": "截止时间上限，ISO 8601"
+          },
+          {
+            "name": "include_deleted",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "包含软删除任务",
+              "default": false,
+              "title": "Include Deleted"
+            },
+            "description": "包含软删除任务"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "description": "返回条数",
+              "default": 500,
+              "title": "Limit"
+            },
+            "description": "返回条数"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "偏移量",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "偏移量"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TaskOut"
+                  },
+                  "title": "Response List Unscheduled Tasks Api Tasks Unscheduled Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/{task_id}": {
+      "get": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "获取任务",
+        "operationId": "get_task_api_tasks__task_id__get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "任务不存在或已删除"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "更新任务",
+        "description": "只更新传入的字段。状态切换到 done 时补 completed_at，切出 done 时清空 completed_at；已软删除的任务不可更新。",
+        "operationId": "update_task_api_tasks__task_id__patch",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "任务不存在或已删除"
+          },
+          "422": {
+            "description": "状态或优先级不存在"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "软删除任务",
+        "description": "只写入 deleted_at；任务排期保留，恢复任务后重新可见。",
+        "operationId": "delete_task_api_tasks__task_id__delete",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "任务不存在"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tasks/{task_id}/restore": {
+      "post": {
+        "tags": [
+          "tasks"
+        ],
+        "summary": "恢复任务",
+        "description": "把 deleted_at 置空；若任务未删除则原样返回。",
+        "operationId": "restore_task_api_tasks__task_id__restore_post",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "任务不存在"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/day-blocks": {
+      "get": {
+        "tags": [
+          "day-blocks"
+        ],
+        "summary": "列出每日基础时间块",
+        "description": "返回全局每日模板，按 start_minute 排序。默认不返回软删除记录，include_deleted=true 可查看。",
+        "operationId": "list_day_blocks_api_day_blocks_get",
+        "parameters": [
+          {
+            "name": "active_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "只返回启用时间块",
+              "default": false,
+              "title": "Active Only"
+            },
+            "description": "只返回启用时间块"
+          },
+          {
+            "name": "include_deleted",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "包含软删除时间块",
+              "default": false,
+              "title": "Include Deleted"
+            },
+            "description": "包含软删除时间块"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DayBlockOut"
+                  },
+                  "title": "Response List Day Blocks Api Day Blocks Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "day-blocks"
+        ],
+        "summary": "整体替换每日基础划分",
+        "description": "用请求体中的 blocks 完整替换每日模板（旧模板软删除后重新插入）。启用状态的时间块必须互不重叠；空数组表示清空。",
+        "operationId": "replace_day_blocks_api_day_blocks_put",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DayBlockBulkReplace"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DayBlockOut"
+                  },
+                  "title": "Response Replace Day Blocks Api Day Blocks Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "时间块重叠或时间范围非法"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "day-blocks"
+        ],
+        "summary": "新建每日时间块",
+        "description": "启用状态的块不能与已有未删除、启用的块重叠。",
+        "operationId": "create_day_block_api_day_blocks_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DayBlockCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayBlockOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "与已有时间块重叠"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/day-blocks/{block_id}": {
+      "get": {
+        "tags": [
+          "day-blocks"
+        ],
+        "summary": "获取每日时间块",
+        "operationId": "get_day_block_api_day_blocks__block_id__get",
+        "parameters": [
+          {
+            "name": "block_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Block Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayBlockOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "时间块不存在或已删除"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "day-blocks"
+        ],
+        "summary": "更新每日时间块",
+        "description": "只更新传入的字段；修改后仍须满足时间范围和重叠约束；已删除的块不可更新。",
+        "operationId": "update_day_block_api_day_blocks__block_id__patch",
+        "parameters": [
+          {
+            "name": "block_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Block Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DayBlockUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayBlockOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "时间块不存在或已删除"
+          },
+          "409": {
+            "description": "与已有时间块重叠"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "day-blocks"
+        ],
+        "summary": "软删除每日时间块",
+        "description": "只写入 deleted_at，不影响已经生成的记录。",
+        "operationId": "delete_day_block_api_day_blocks__block_id__delete",
+        "parameters": [
+          {
+            "name": "block_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Block Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "时间块不存在"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/day-blocks/{block_id}/restore": {
+      "post": {
+        "tags": [
+          "day-blocks"
+        ],
+        "summary": "恢复每日时间块",
+        "description": "把 deleted_at 置空；若与当前启用块重叠，返回 409。",
+        "operationId": "restore_day_block_api_day_blocks__block_id__restore_post",
+        "parameters": [
+          {
+            "name": "block_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Block Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayBlockOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "时间块不存在"
+          },
+          "409": {
+            "description": "与已有时间块重叠"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/fixed-blocks": {
+      "get": {
+        "tags": [
+          "fixed-blocks"
+        ],
+        "summary": "列出固定块",
+        "description": "返回每日、每周、每月的固定块，按重复类型和时间排序。默认不返回软删除记录，include_deleted=true 可查看。",
+        "operationId": "list_fixed_blocks_api_fixed_blocks_get",
+        "parameters": [
+          {
+            "name": "recurrence",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(daily|weekly|monthly)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按重复类型筛选",
+              "title": "Recurrence"
+            },
+            "description": "按重复类型筛选"
+          },
+          {
+            "name": "active_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "只返回启用固定块",
+              "default": false,
+              "title": "Active Only"
+            },
+            "description": "只返回启用固定块"
+          },
+          {
+            "name": "include_deleted",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "包含软删除固定块",
+              "default": false,
+              "title": "Include Deleted"
+            },
+            "description": "包含软删除固定块"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FixedBlockOut"
+                  },
+                  "title": "Response List Fixed Blocks Api Fixed Blocks Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "fixed-blocks"
+        ],
+        "summary": "新建固定块",
+        "description": "daily 的 recurrence_value 必须为空；weekly 为 1..7（ISO，1=周一）；monthly 为 1..31。不支持跨午夜。",
+        "operationId": "create_fixed_block_api_fixed_blocks_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FixedBlockCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixedBlockOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "重复规则或时间范围非法"
+          }
+        }
+      }
+    },
+    "/api/fixed-blocks/{block_id}": {
+      "get": {
+        "tags": [
+          "fixed-blocks"
+        ],
+        "summary": "获取固定块",
+        "operationId": "get_fixed_block_api_fixed_blocks__block_id__get",
+        "parameters": [
+          {
+            "name": "block_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Block Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixedBlockOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "固定块不存在或已删除"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "fixed-blocks"
+        ],
+        "summary": "更新固定块",
+        "description": "只更新传入的字段；修改后的重复规则和时间范围必须仍然合法；已删除的块不可更新。",
+        "operationId": "update_fixed_block_api_fixed_blocks__block_id__patch",
+        "parameters": [
+          {
+            "name": "block_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Block Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FixedBlockUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixedBlockOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "固定块不存在或已删除"
+          },
+          "422": {
+            "description": "字段组合非法"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "fixed-blocks"
+        ],
+        "summary": "软删除固定块",
+        "description": "只写入 deleted_at；其例外记录保留，恢复固定块后继续生效。",
+        "operationId": "delete_fixed_block_api_fixed_blocks__block_id__delete",
+        "parameters": [
+          {
+            "name": "block_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Block Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "固定块不存在"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/fixed-blocks/{block_id}/restore": {
+      "post": {
+        "tags": [
+          "fixed-blocks"
+        ],
+        "summary": "恢复固定块",
+        "description": "把 deleted_at 置空。",
+        "operationId": "restore_fixed_block_api_fixed_blocks__block_id__restore_post",
+        "parameters": [
+          {
+            "name": "block_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Block Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixedBlockOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "固定块不存在"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/fixed-blocks/{fixed_block_id}/exceptions": {
+      "get": {
+        "tags": [
+          "fixed-block-exceptions"
+        ],
+        "summary": "列出某个固定块的例外",
+        "description": "默认不返回软删除记录，include_deleted=true 可查看。",
+        "operationId": "list_exceptions_api_fixed_blocks__fixed_block_id__exceptions_get",
+        "parameters": [
+          {
+            "name": "fixed_block_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Fixed Block Id"
+            }
+          },
+          {
+            "name": "active_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "只返回启用例外",
+              "default": false,
+              "title": "Active Only"
+            },
+            "description": "只返回启用例外"
+          },
+          {
+            "name": "include_deleted",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "包含软删除例外",
+              "default": false,
+              "title": "Include Deleted"
+            },
+            "description": "包含软删除例外"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FixedBlockExceptionOut"
+                  },
+                  "title": "Response List Exceptions Api Fixed Blocks  Fixed Block Id  Exceptions Get"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "固定块不存在或已删除"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "fixed-block-exceptions"
+        ],
+        "summary": "为固定块新建例外",
+        "description": "例外只表示跳过。start_minute/end_minute 都为空时跳过整个固定块；都填写时只跳过与该时段重叠的部分。日期条件全部为空时，表示生效范围内每次发生都跳过。",
+        "operationId": "create_exception_api_fixed_blocks__fixed_block_id__exceptions_post",
+        "parameters": [
+          {
+            "name": "fixed_block_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Fixed Block Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FixedBlockExceptionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixedBlockExceptionOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "固定块不存在或已删除"
+          },
+          "422": {
+            "description": "字段组合非法"
+          }
+        }
+      }
+    },
+    "/api/fixed-block-exceptions": {
+      "get": {
+        "tags": [
+          "fixed-block-exceptions"
+        ],
+        "summary": "列出固定块例外",
+        "description": "可按 fixed_block_id 筛选。默认不返回软删除记录，也不返回父固定块已删除的记录；include_deleted=true 可全部查看。",
+        "operationId": "list_all_exceptions_api_fixed_block_exceptions_get",
+        "parameters": [
+          {
+            "name": "fixed_block_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "固定块 ID",
+              "title": "Fixed Block Id"
+            },
+            "description": "固定块 ID"
+          },
+          {
+            "name": "active_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "只返回启用例外",
+              "default": false,
+              "title": "Active Only"
+            },
+            "description": "只返回启用例外"
+          },
+          {
+            "name": "include_deleted",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "包含软删除例外及父块已删除的例外",
+              "default": false,
+              "title": "Include Deleted"
+            },
+            "description": "包含软删除例外及父块已删除的例外"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FixedBlockExceptionOut"
+                  },
+                  "title": "Response List All Exceptions Api Fixed Block Exceptions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/fixed-block-exceptions/{exception_id}": {
+      "get": {
+        "tags": [
+          "fixed-block-exceptions"
+        ],
+        "summary": "获取固定块例外",
+        "operationId": "get_exception_api_fixed_block_exceptions__exception_id__get",
+        "parameters": [
+          {
+            "name": "exception_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Exception Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixedBlockExceptionOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "例外不存在或已删除"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "fixed-block-exceptions"
+        ],
+        "summary": "更新固定块例外",
+        "description": "只更新传入的字段；更新后的时段和日期范围必须合法；已删除的例外不可更新。",
+        "operationId": "update_exception_api_fixed_block_exceptions__exception_id__patch",
+        "parameters": [
+          {
+            "name": "exception_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Exception Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FixedBlockExceptionUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixedBlockExceptionOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "例外不存在或已删除"
+          },
+          "422": {
+            "description": "字段组合非法"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "fixed-block-exceptions"
+        ],
+        "summary": "软删除固定块例外",
+        "description": "只写入 deleted_at。",
+        "operationId": "delete_exception_api_fixed_block_exceptions__exception_id__delete",
+        "parameters": [
+          {
+            "name": "exception_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Exception Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "例外不存在"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/fixed-block-exceptions/{exception_id}/restore": {
+      "post": {
+        "tags": [
+          "fixed-block-exceptions"
+        ],
+        "summary": "恢复固定块例外",
+        "description": "把 deleted_at 置空。",
+        "operationId": "restore_exception_api_fixed_block_exceptions__exception_id__restore_post",
+        "parameters": [
+          {
+            "name": "exception_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Exception Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixedBlockExceptionOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "例外不存在"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/task-schedules": {
+      "get": {
+        "tags": [
+          "task-schedules"
+        ],
+        "summary": "列出任务排期",
+        "description": "按日期和开始时间排序，可同时按日期、任务、状态筛选。默认排除软删除排期及其所属任务已删除的排期。",
+        "operationId": "list_schedules_api_task_schedules_get",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "排期日期",
+              "title": "Date"
+            },
+            "description": "排期日期"
+          },
+          {
+            "name": "task_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "任务 ID",
+              "title": "Task Id"
+            },
+            "description": "任务 ID"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(planned|done|skipped)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "排期状态",
+              "title": "Status"
+            },
+            "description": "排期状态"
+          },
+          {
+            "name": "include_deleted",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "包含软删除排期",
+              "default": false,
+              "title": "Include Deleted"
+            },
+            "description": "包含软删除排期"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TaskScheduleOut"
+                  },
+                  "title": "Response List Schedules Api Task Schedules Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "task-schedules"
+        ],
+        "summary": "新建任务排期",
+        "description": "把任务安排到某天的某个时间段。若与 allow_task_schedule = 0 的固定块重叠，或与同一天未删除、未跳过的其他排期重叠，返回 409 并列出冲突。",
+        "operationId": "create_schedule_api_task_schedules_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskScheduleCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskScheduleOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "任务不存在或时间范围非法"
+          },
+          "409": {
+            "description": "与固定块或其他任务排期冲突"
+          }
+        }
+      }
+    },
+    "/api/task-schedules/{schedule_id}": {
+      "get": {
+        "tags": [
+          "task-schedules"
+        ],
+        "summary": "获取任务排期",
+        "operationId": "get_schedule_api_task_schedules__schedule_id__get",
+        "parameters": [
+          {
+            "name": "schedule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Schedule Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskScheduleOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "排期不存在、已删除或任务已删除"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "task-schedules"
+        ],
+        "summary": "更新任务排期",
+        "description": "只更新传入的字段；修改后的时间范围和任务引用必须合法；已删除的排期不可更新。若更新后与 allow_task_schedule = 0 的固定块重叠，或与同一天未删除、未跳过的其他排期重叠，返回 409 并列出冲突。",
+        "operationId": "update_schedule_api_task_schedules__schedule_id__patch",
+        "parameters": [
+          {
+            "name": "schedule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Schedule Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskScheduleUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskScheduleOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "排期不存在或已删除"
+          },
+          "422": {
+            "description": "任务不存在或字段非法"
+          },
+          "409": {
+            "description": "与固定块或其他任务排期冲突"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "task-schedules"
+        ],
+        "summary": "软删除任务排期",
+        "description": "只写入 deleted_at，恢复后重新出现在列表中。",
+        "operationId": "delete_schedule_api_task_schedules__schedule_id__delete",
+        "parameters": [
+          {
+            "name": "schedule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Schedule Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "排期不存在"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/task-schedules/{schedule_id}/restore": {
+      "post": {
+        "tags": [
+          "task-schedules"
+        ],
+        "summary": "恢复任务排期",
+        "description": "把 deleted_at 置空；若所属任务已删除，排期仍保持隐藏。",
+        "operationId": "restore_schedule_api_task_schedules__schedule_id__restore_post",
+        "parameters": [
+          {
+            "name": "schedule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Schedule Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskScheduleOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "排期不存在"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/memos": {
+      "get": {
+        "tags": [
+          "daily-memos"
+        ],
+        "summary": "按天/周/月列出备忘录",
+        "description": "period=day 返回 date 当天；period=week 按 app_meta.week_start 计算所在周；period=month 返回 date 所在自然月。结果按日期、创建顺序升序。备忘录只允许新增，不支持修改和删除，同一天可以有多条。",
+        "operationId": "list_memos_api_memos_get",
+        "parameters": [
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "day",
+                "week",
+                "month"
+              ],
+              "type": "string",
+              "description": "时间范围：day / week / month",
+              "default": "day",
+              "title": "Period"
+            },
+            "description": "时间范围：day / week / month"
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "基准日期，YYYY-MM-DD",
+              "title": "Date"
+            },
+            "description": "基准日期，YYYY-MM-DD"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DailyMemoOut"
+                  },
+                  "title": "Response List Memos Api Memos Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "daily-memos"
+        ],
+        "summary": "新增备忘录",
+        "description": "新增一条备忘录，同一天可以有多条。创建后不支持修改和删除。",
+        "operationId": "create_memo_api_memos_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DailyMemoCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyMemoOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/memos/by-date/{memo_date}": {
+      "get": {
+        "tags": [
+          "daily-memos"
+        ],
+        "summary": "按日期获取备忘录",
+        "description": "返回该日期的全部备忘录，按创建顺序升序；没有记录时返回空数组。",
+        "operationId": "get_memo_by_date_api_memos_by_date__memo_date__get",
+        "parameters": [
+          {
+            "name": "memo_date",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Memo Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DailyMemoOut"
+                  },
+                  "title": "Response Get Memo By Date Api Memos By Date  Memo Date  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plan/fixed-occurrences": {
+      "get": {
+        "tags": [
+          "planning"
+        ],
+        "summary": "计算某天实际发生的固定块",
+        "description": "按 daily/weekly/monthly 规则匹配固定块，并应用生效日期和例外。例外只跳过：未填时段时跳过整个块，填写时段时只跳过重叠部分，因此同一固定块可能返回多段。时间段为左闭右开。",
+        "operationId": "fixed_occurrences_api_plan_fixed_occurrences_get",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "日期，YYYY-MM-DD",
+              "title": "Date"
+            },
+            "description": "日期，YYYY-MM-DD"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FixedOccurrenceOut"
+                  },
+                  "title": "Response Fixed Occurrences Api Plan Fixed Occurrences Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "DailyMemoCreate": {
+        "properties": {
+          "memo_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Memo Date",
+            "description": "备忘录日期，YYYY-MM-DD"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Content",
+            "description": "备忘录内容"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "memo_date",
+          "content"
+        ],
+        "title": "DailyMemoCreate"
+      },
+      "DailyMemoOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "memo_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Memo Date"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "memo_date",
+          "content",
+          "created_at",
+          "updated_at",
+          "deleted_at"
+        ],
+        "title": "DailyMemoOut"
+      },
+      "DayBlockBulkReplace": {
+        "properties": {
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/DayBlockCreate"
+            },
+            "type": "array",
+            "title": "Blocks",
+            "description": "新的完整每日划分；空数组表示清空模板"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DayBlockBulkReplace"
+      },
+      "DayBlockCreate": {
+        "properties": {
+          "start_minute": {
+            "type": "integer",
+            "maximum": 1439.0,
+            "minimum": 0.0,
+            "title": "Start Minute",
+            "description": "开始分钟，00:00 = 0"
+          },
+          "end_minute": {
+            "type": "integer",
+            "maximum": 1440.0,
+            "minimum": 1.0,
+            "title": "End Minute",
+            "description": "结束分钟，24:00 = 1440"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label",
+            "description": "名称"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind",
+            "description": "分类，如 work/rest/sleep"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark",
+            "description": "备注"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "description": "是否启用",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "start_minute",
+          "end_minute"
+        ],
+        "title": "DayBlockCreate"
+      },
+      "DayBlockOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "start_minute": {
+            "type": "integer",
+            "title": "Start Minute"
+          },
+          "end_minute": {
+            "type": "integer",
+            "title": "End Minute"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "start_minute",
+          "end_minute",
+          "label",
+          "kind",
+          "remark",
+          "is_active",
+          "created_at",
+          "updated_at",
+          "deleted_at"
+        ],
+        "title": "DayBlockOut"
+      },
+      "DayBlockUpdate": {
+        "properties": {
+          "start_minute": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1439.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Minute",
+            "description": "开始分钟"
+          },
+          "end_minute": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1440.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Minute",
+            "description": "结束分钟"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label",
+            "description": "名称"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind",
+            "description": "分类"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark",
+            "description": "备注"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active",
+            "description": "是否启用"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DayBlockUpdate"
+      },
+      "FixedBlockCreate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "description": "固定块名称"
+          },
+          "recurrence": {
+            "type": "string",
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly"
+            ],
+            "title": "Recurrence",
+            "description": "重复类型"
+          },
+          "recurrence_value": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recurrence Value",
+            "description": "循环值：daily 为 null；weekly 为 ISO 星期 1..7；monthly 为日号 1..31",
+            "examples": [
+              5
+            ]
+          },
+          "start_minute": {
+            "type": "integer",
+            "maximum": 1439.0,
+            "minimum": 0.0,
+            "title": "Start Minute",
+            "description": "开始分钟"
+          },
+          "end_minute": {
+            "type": "integer",
+            "maximum": 1440.0,
+            "minimum": 1.0,
+            "title": "End Minute",
+            "description": "结束分钟"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From",
+            "description": "生效起始日期，含端点"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To",
+            "description": "生效结束日期，含端点"
+          },
+          "overlap_priority": {
+            "type": "integer",
+            "title": "Overlap Priority",
+            "description": "固定块冲突时的优先级，越大越优先",
+            "default": 0
+          },
+          "allow_task_schedule": {
+            "type": "boolean",
+            "title": "Allow Task Schedule",
+            "description": "是否允许在该固定块时段内添加任务排期",
+            "default": true
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark",
+            "description": "备注"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "description": "是否启用",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title",
+          "recurrence",
+          "start_minute",
+          "end_minute"
+        ],
+        "title": "FixedBlockCreate"
+      },
+      "FixedBlockExceptionCreate": {
+        "properties": {
+          "effective_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From",
+            "description": "例外生效起始日期，含端点"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To",
+            "description": "例外生效结束日期，含端点"
+          },
+          "skip_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skip Date",
+            "description": "只匹配该具体日期"
+          },
+          "weekday": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 7.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekday",
+            "description": "只匹配 ISO 星期 1..7"
+          },
+          "day_of_month": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 31.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day Of Month",
+            "description": "只匹配日号 1..31"
+          },
+          "start_minute": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1439.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Minute",
+            "description": "可选；只跳过与该时段重叠的部分"
+          },
+          "end_minute": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1440.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Minute",
+            "description": "可选；必须与 start_minute 同时出现"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark",
+            "description": "备注"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "description": "是否启用",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "FixedBlockExceptionCreate"
+      },
+      "FixedBlockExceptionOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "fixed_block_id": {
+            "type": "integer",
+            "title": "Fixed Block Id"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To"
+          },
+          "skip_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skip Date"
+          },
+          "weekday": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekday"
+          },
+          "day_of_month": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day Of Month"
+          },
+          "start_minute": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Minute"
+          },
+          "end_minute": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Minute"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "fixed_block_id",
+          "effective_from",
+          "effective_to",
+          "skip_date",
+          "weekday",
+          "day_of_month",
+          "start_minute",
+          "end_minute",
+          "remark",
+          "is_active",
+          "created_at",
+          "updated_at",
+          "deleted_at"
+        ],
+        "title": "FixedBlockExceptionOut"
+      },
+      "FixedBlockExceptionUpdate": {
+        "properties": {
+          "effective_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From",
+            "description": "例外生效起始日期"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To",
+            "description": "例外生效结束日期"
+          },
+          "skip_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skip Date",
+            "description": "具体日期"
+          },
+          "weekday": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 7.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekday",
+            "description": "ISO 星期"
+          },
+          "day_of_month": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 31.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day Of Month",
+            "description": "日号"
+          },
+          "start_minute": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1439.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Minute",
+            "description": "跳过时段开始"
+          },
+          "end_minute": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1440.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Minute",
+            "description": "跳过时段结束"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark",
+            "description": "备注"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active",
+            "description": "是否启用"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "FixedBlockExceptionUpdate"
+      },
+      "FixedBlockOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "recurrence": {
+            "type": "string",
+            "title": "Recurrence"
+          },
+          "recurrence_value": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recurrence Value"
+          },
+          "start_minute": {
+            "type": "integer",
+            "title": "Start Minute"
+          },
+          "end_minute": {
+            "type": "integer",
+            "title": "End Minute"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To"
+          },
+          "overlap_priority": {
+            "type": "integer",
+            "title": "Overlap Priority"
+          },
+          "allow_task_schedule": {
+            "type": "boolean",
+            "title": "Allow Task Schedule"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "recurrence",
+          "recurrence_value",
+          "start_minute",
+          "end_minute",
+          "effective_from",
+          "effective_to",
+          "overlap_priority",
+          "allow_task_schedule",
+          "remark",
+          "is_active",
+          "created_at",
+          "updated_at",
+          "deleted_at"
+        ],
+        "title": "FixedBlockOut"
+      },
+      "FixedBlockUpdate": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title",
+            "description": "固定块名称"
+          },
+          "recurrence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "daily",
+                  "weekly",
+                  "monthly"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recurrence",
+            "description": "重复类型"
+          },
+          "recurrence_value": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recurrence Value",
+            "description": "循环值"
+          },
+          "start_minute": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1439.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Minute",
+            "description": "开始分钟"
+          },
+          "end_minute": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1440.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Minute",
+            "description": "结束分钟"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From",
+            "description": "生效起始日期"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To",
+            "description": "生效结束日期"
+          },
+          "overlap_priority": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overlap Priority",
+            "description": "冲突优先级"
+          },
+          "allow_task_schedule": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allow Task Schedule",
+            "description": "是否允许在该固定块时段内添加任务排期"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark",
+            "description": "备注"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active",
+            "description": "是否启用"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "FixedBlockUpdate"
+      },
+      "FixedOccurrenceOut": {
+        "properties": {
+          "fixed_block_id": {
+            "type": "integer",
+            "title": "Fixed Block Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "start_minute": {
+            "type": "integer",
+            "title": "Start Minute"
+          },
+          "end_minute": {
+            "type": "integer",
+            "title": "End Minute"
+          },
+          "overlap_priority": {
+            "type": "integer",
+            "title": "Overlap Priority"
+          },
+          "allow_task_schedule": {
+            "type": "boolean",
+            "title": "Allow Task Schedule"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fixed_block_id",
+          "title",
+          "date",
+          "start_minute",
+          "end_minute",
+          "overlap_priority",
+          "allow_task_schedule",
+          "remark"
+        ],
+        "title": "FixedOccurrenceOut"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "MetaValueUpdate": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Value",
+            "description": "配置值"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "MetaValueUpdate"
+      },
+      "PriorityLevelCreate": {
+        "properties": {
+          "level": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Level",
+            "description": "优先级等级，1 最高"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Name",
+            "description": "显示名，如 P0"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usage",
+            "description": "用法说明：什么情况下使用该等级"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark",
+            "description": "备注"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color",
+            "description": "前端颜色，如 #e5484d"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "description": "是否启用",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "level",
+          "name"
+        ],
+        "title": "PriorityLevelCreate"
+      },
+      "PriorityLevelOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "level": {
+            "type": "integer",
+            "title": "Level"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usage"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "level",
+          "name",
+          "usage",
+          "remark",
+          "color",
+          "is_active",
+          "created_at",
+          "updated_at",
+          "deleted_at"
+        ],
+        "title": "PriorityLevelOut"
+      },
+      "PriorityLevelUpdate": {
+        "properties": {
+          "level": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level",
+            "description": "优先级等级，1 最高"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "显示名"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usage",
+            "description": "用法说明"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark",
+            "description": "备注"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color",
+            "description": "前端颜色，如 #e5484d"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active",
+            "description": "是否启用"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PriorityLevelUpdate"
+      },
+      "TaskCreate": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Title",
+            "description": "任务标题"
+          },
+          "priority_level_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority Level Id",
+            "description": "优先级 ID"
+          },
+          "status_id": {
+            "type": "integer",
+            "title": "Status Id",
+            "description": "状态 ID，内置 1=待办",
+            "default": 1
+          },
+          "deadline_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline At",
+            "description": "截止时间，ISO 8601；不传或 null 表示无截止时间",
+            "examples": [
+              "2026-11-30T18:00:00+08:00"
+            ]
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress",
+            "description": "进度文字描述"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark",
+            "description": "备注"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "TaskCreate"
+      },
+      "TaskOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "priority_level_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority Level Id"
+          },
+          "status_id": {
+            "type": "integer",
+            "title": "Status Id"
+          },
+          "deadline_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline At"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "status_code": {
+            "type": "string",
+            "title": "Status Code"
+          },
+          "status_name": {
+            "type": "string",
+            "title": "Status Name"
+          },
+          "priority_level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority Level",
+            "description": "优先级等级，1 最高"
+          },
+          "priority_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority Name"
+          },
+          "priority_color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority Color"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "priority_level_id",
+          "status_id",
+          "deadline_at",
+          "progress",
+          "remark",
+          "created_at",
+          "updated_at",
+          "deleted_at",
+          "completed_at",
+          "status_code",
+          "status_name",
+          "priority_name",
+          "priority_color"
+        ],
+        "title": "TaskOut"
+      },
+      "TaskScheduleCreate": {
+        "properties": {
+          "task_id": {
+            "type": "integer",
+            "title": "Task Id",
+            "description": "任务 ID"
+          },
+          "plan_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Plan Date",
+            "description": "排期日期"
+          },
+          "start_minute": {
+            "type": "integer",
+            "maximum": 1439.0,
+            "minimum": 0.0,
+            "title": "Start Minute",
+            "description": "开始分钟"
+          },
+          "end_minute": {
+            "type": "integer",
+            "maximum": 1440.0,
+            "minimum": 1.0,
+            "title": "End Minute",
+            "description": "结束分钟"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "planned",
+              "done",
+              "skipped"
+            ],
+            "title": "Status",
+            "description": "排期状态",
+            "default": "planned"
+          },
+          "allow_override": {
+            "type": "boolean",
+            "title": "Allow Override",
+            "description": "是否允许被同层更高优先级任务挤占",
+            "default": true
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note",
+            "description": "备注"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "task_id",
+          "plan_date",
+          "start_minute",
+          "end_minute"
+        ],
+        "title": "TaskScheduleCreate"
+      },
+      "TaskScheduleOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "task_id": {
+            "type": "integer",
+            "title": "Task Id"
+          },
+          "task_title": {
+            "type": "string",
+            "title": "Task Title"
+          },
+          "plan_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Plan Date"
+          },
+          "start_minute": {
+            "type": "integer",
+            "title": "Start Minute"
+          },
+          "end_minute": {
+            "type": "integer",
+            "title": "End Minute"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "allow_override": {
+            "type": "boolean",
+            "title": "Allow Override"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "task_id",
+          "task_title",
+          "plan_date",
+          "start_minute",
+          "end_minute",
+          "status",
+          "allow_override",
+          "note",
+          "created_at",
+          "updated_at",
+          "deleted_at"
+        ],
+        "title": "TaskScheduleOut"
+      },
+      "TaskScheduleUpdate": {
+        "properties": {
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id",
+            "description": "任务 ID"
+          },
+          "plan_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Date",
+            "description": "排期日期"
+          },
+          "start_minute": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1439.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Minute",
+            "description": "开始分钟"
+          },
+          "end_minute": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1440.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Minute",
+            "description": "结束分钟"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "planned",
+                  "done",
+                  "skipped"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status",
+            "description": "排期状态"
+          },
+          "allow_override": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allow Override",
+            "description": "是否允许被挤占"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note",
+            "description": "备注"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "TaskScheduleUpdate"
+      },
+      "TaskStatusCreate": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Code",
+            "description": "唯一代码，如 todo、doing、blocked",
+            "examples": [
+              "todo"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "description": "显示名"
+          },
+          "sort_order": {
+            "type": "integer",
+            "title": "Sort Order",
+            "description": "排序值，越小越靠前",
+            "default": 0
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark",
+            "description": "备注"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "description": "是否启用",
+            "default": true
+          },
+          "is_initial_filter": {
+            "type": "boolean",
+            "title": "Is Initial Filter",
+            "description": "是否纳入任务列表的初始状态筛选",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "TaskStatusCreate"
+      },
+      "TaskStatusOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "sort_order": {
+            "type": "integer",
+            "title": "Sort Order"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "is_initial_filter": {
+            "type": "boolean",
+            "title": "Is Initial Filter"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "name",
+          "sort_order",
+          "remark",
+          "is_active",
+          "is_initial_filter",
+          "created_at",
+          "updated_at",
+          "deleted_at"
+        ],
+        "title": "TaskStatusOut"
+      },
+      "TaskStatusUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name",
+            "description": "显示名"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order",
+            "description": "排序值"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark",
+            "description": "备注"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active",
+            "description": "是否启用"
+          },
+          "is_initial_filter": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Initial Filter",
+            "description": "是否纳入任务列表的初始状态筛选"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "TaskStatusUpdate"
+      },
+      "TaskUpdate": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title",
+            "description": "任务标题"
+          },
+          "priority_level_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority Level Id",
+            "description": "优先级 ID"
+          },
+          "status_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Id",
+            "description": "状态 ID"
+          },
+          "deadline_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline At",
+            "description": "截止时间，ISO 8601"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress",
+            "description": "进度文字描述"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark",
+            "description": "备注"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "TaskUpdate"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "meta",
+      "description": "健康检查与 app_meta 配置"
+    },
+    {
+      "name": "task-statuses",
+      "description": "任务状态表"
+    },
+    {
+      "name": "priority-levels",
+      "description": "用户自定义优先级"
+    },
+    {
+      "name": "tasks",
+      "description": "任务 CRUD"
+    },
+    {
+      "name": "day-blocks",
+      "description": "每日基础时间划分模板"
+    },
+    {
+      "name": "fixed-blocks",
+      "description": "每日/每周/每月固定块"
+    },
+    {
+      "name": "fixed-block-exceptions",
+      "description": "固定块的跳过例外"
+    },
+    {
+      "name": "task-schedules",
+      "description": "任务排期"
+    },
+    {
+      "name": "daily-memos",
+      "description": "每日备忘录，一天一行，支持按天/周/月查询"
+    },
+    {
+      "name": "planning",
+      "description": "按日期计算固定块实际发生情况"
+    }
+  ]
+}
