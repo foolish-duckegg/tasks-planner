@@ -279,6 +279,7 @@ onMounted(load)
         :timezone="app.timezone"
         :show-nav="false"
         @select-schedule="router.push('/planner')"
+        @occurrence-updated="reloadCalendar"
       />
 
       <div class="stack">

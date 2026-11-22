@@ -91,8 +91,8 @@ class ApiClient:
     def patch(self, path: str, body: Any = None) -> Any:
         return self.request("PATCH", path, body=body)
 
-    def delete(self, path: str) -> Any:
-        return self.request("DELETE", path)
+    def delete(self, path: str, params: dict[str, Any] | None = None) -> Any:
+        return self.request("DELETE", path, params=params)
 
 
 _STATUS_CACHE: dict[int, list[dict[str, Any]]] = {}

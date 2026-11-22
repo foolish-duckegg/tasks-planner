@@ -2233,6 +2233,233 @@
         }
       }
     },
+    "/api/fixed-block-occurrences": {
+      "get": {
+        "tags": [
+          "fixed-block-occurrences"
+        ],
+        "summary": "列出固定块发生实例及状态",
+        "description": "按日期范围实时计算固定块发生实例，并附带该次的状态。date_from 默认取最早生效日期，date_to 默认今天。status=pending 只返回时间已过且未完成、未跳过的实例；status=unmarked 只返回没有状态记录的实例。",
+        "operationId": "list_occurrences_api_fixed_block_occurrences_get",
+        "parameters": [
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "起始日期（含），默认取最早生效日期",
+              "title": "Date From"
+            },
+            "description": "起始日期（含），默认取最早生效日期"
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "结束日期（含），默认今天",
+              "title": "Date To"
+            },
+            "description": "结束日期（含），默认今天"
+          },
+          {
+            "name": "fixed_block_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按固定块筛选",
+              "title": "Fixed Block Id"
+            },
+            "description": "按固定块筛选"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(done|skipped|missed|unmarked|pending)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "done/skipped/missed/unmarked/pending",
+              "title": "Status"
+            },
+            "description": "done/skipped/missed/unmarked/pending"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 1,
+              "description": "返回条数",
+              "default": 500,
+              "title": "Limit"
+            },
+            "description": "返回条数"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "偏移量",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "偏移量"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FixedBlockOccurrenceOut"
+                  },
+                  "title": "Response List Occurrences Api Fixed Block Occurrences Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "fixed-block-occurrences"
+        ],
+        "summary": "标记固定块某次状态",
+        "description": "按固定块和日期 upsert 状态（done/skipped/missed）；该日期没有发生时返回 422。",
+        "operationId": "upsert_occurrence_status_api_fixed_block_occurrences_put",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FixedBlockOccurrenceStatusUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixedBlockOccurrenceLogOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "固定块不存在或已删除"
+          },
+          "422": {
+            "description": "该日期没有发生的固定块实例"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "fixed-block-occurrences"
+        ],
+        "summary": "清除固定块某次状态",
+        "description": "按固定块和日期软删除状态记录，使其恢复为未标记。",
+        "operationId": "clear_occurrence_status_api_fixed_block_occurrences_delete",
+        "parameters": [
+          {
+            "name": "fixed_block_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "description": "固定块 ID",
+              "title": "Fixed Block Id"
+            },
+            "description": "固定块 ID"
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "发生日期 YYYY-MM-DD",
+              "title": "Date"
+            },
+            "description": "发生日期 YYYY-MM-DD"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "该次固定块没有状态记录"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/task-schedules": {
       "get": {
         "tags": [
@@ -3151,7 +3378,7 @@
               }
             ],
             "title": "Effective From",
-            "description": "生效起始日期，含端点"
+            "description": "生效起始日期，含端点；不传则默认为服务端当天"
           },
           "effective_to": {
             "anyOf": [
@@ -3600,6 +3827,212 @@
         "type": "object",
         "title": "FixedBlockExceptionUpdate"
       },
+      "FixedBlockOccurrenceLogOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "fixed_block_id": {
+            "type": "integer",
+            "title": "Fixed Block Id"
+          },
+          "occurrence_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Occurrence Date"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "fixed_block_id",
+          "occurrence_date",
+          "status",
+          "note",
+          "created_at",
+          "updated_at",
+          "deleted_at"
+        ],
+        "title": "FixedBlockOccurrenceLogOut"
+      },
+      "FixedBlockOccurrenceOut": {
+        "properties": {
+          "fixed_block_id": {
+            "type": "integer",
+            "title": "Fixed Block Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "start_minute": {
+            "type": "integer",
+            "title": "Start Minute"
+          },
+          "end_minute": {
+            "type": "integer",
+            "title": "End Minute"
+          },
+          "overlap_priority": {
+            "type": "integer",
+            "title": "Overlap Priority"
+          },
+          "allow_task_schedule": {
+            "type": "boolean",
+            "title": "Allow Task Schedule"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status",
+            "description": "done/skipped/missed；null 表示未标记"
+          },
+          "log_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Log Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "is_past": {
+            "type": "boolean",
+            "title": "Is Past",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "fixed_block_id",
+          "title",
+          "date",
+          "start_minute",
+          "end_minute",
+          "overlap_priority",
+          "allow_task_schedule",
+          "remark"
+        ],
+        "title": "FixedBlockOccurrenceOut"
+      },
+      "FixedBlockOccurrenceStatusUpdate": {
+        "properties": {
+          "fixed_block_id": {
+            "type": "integer",
+            "title": "Fixed Block Id",
+            "description": "固定块 ID"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date",
+            "description": "发生日期 YYYY-MM-DD"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "done",
+              "skipped",
+              "missed"
+            ],
+            "title": "Status",
+            "description": "done=已完成，skipped=主动跳过，missed=未完成"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note",
+            "description": "备注"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "fixed_block_id",
+          "date",
+          "status"
+        ],
+        "title": "FixedBlockOccurrenceStatusUpdate"
+      },
       "FixedBlockOut": {
         "properties": {
           "id": {
@@ -3634,15 +4067,8 @@
             "title": "End Minute"
           },
           "effective_from": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
+            "format": "date",
             "title": "Effective From"
           },
           "effective_to": {
@@ -5039,6 +5465,10 @@
     {
       "name": "fixed-block-exceptions",
       "description": "固定块的跳过例外"
+    },
+    {
+      "name": "fixed-block-occurrences",
+      "description": "固定块发生实例状态（完成/跳过/未完成）"
     },
     {
       "name": "task-schedules",

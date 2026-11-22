@@ -134,9 +134,35 @@ tp fixed update ID [--title ...] [--recurrence ...] [--value ...] [--start ...] 
                    [--allow-task-schedule|--no-task-schedule] [--remark ...] [--active|--inactive]
 tp fixed delete ID
 tp fixed restore ID
+tp fixed occurrences [--from DATE] [--to DATE] [--block ID] \
+                     [--status done|skipped|missed|unmarked|pending] [--limit 500] [--offset 0]
+tp fixed pending [--from DATE] [--to DATE] [--block ID] [--limit 500] [--offset 0]
+tp fixed mark ID DATE done|skipped|missed [--note ...]
+tp fixed unmark ID DATE
 ```
 
 `weekly` 的 `--value` 为 ISO 星期 `1..7`（1=周一）；`monthly` 为日号 `1..31`；`daily` 不传 `--value`。传 `--no-task-schedule` 表示禁止在该固定块时段内添加任务排期。
+
+`effective_from` 必填，`fixed add` 不传 `--from` 时由服务端按 `app_meta.timezone` 取当天，也可以显式写成更早日期（如 `1970-01-01`）。`--clear-effective` / `--clear-effective-to` 现在只清空生效结束日期。
+
+发生实例状态：
+
+```bash
+# 列出所有已过时间、尚未完成或跳过的固定块
+tp fixed pending
+tp --json fixed pending --from 2026-01-01 --to today
+
+# 也可以按状态查看
+tp fixed occurrences --status unmarked
+tp fixed occurrences --status done --block 3 --from 2026-11-01 --to 2026-11-30
+
+# 标记 / 清除某一次
+tp fixed mark 3 today done
+tp fixed mark 3 2026-11-21 skipped --note "临时有事"
+tp fixed unmark 3 2026-11-21
+```
+
+状态含义：`done` 已完成、`skipped` 主动跳过、`missed` 未完成；没有记录即未标记。`pending` 只返回 `is_past` 且状态不是 `done/skipped` 的实例。
 
 ### 固定块例外
 

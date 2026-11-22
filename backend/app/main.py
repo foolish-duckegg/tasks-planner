@@ -19,6 +19,7 @@ from .routers import (
     fixed_blocks,
     memos,
     meta,
+    occurrences,
     plan,
     priorities,
     statuses,
@@ -54,6 +55,7 @@ app = FastAPI(
         {"name": "day-blocks", "description": "每日基础时间划分模板"},
         {"name": "fixed-blocks", "description": "每日/每周/每月固定块"},
         {"name": "fixed-block-exceptions", "description": "固定块的跳过例外"},
+        {"name": "fixed-block-occurrences", "description": "固定块发生实例状态（完成/跳过/未完成）"},
         {"name": "task-schedules", "description": "任务排期"},
         {"name": "daily-memos", "description": "每日备忘录，一天一行，支持按天/周/月查询"},
         {"name": "planning", "description": "按日期计算固定块实际发生情况"},
@@ -134,6 +136,7 @@ app.include_router(day_blocks.router)
 app.include_router(fixed_blocks.router)
 app.include_router(exceptions.nested_router)
 app.include_router(exceptions.router)
+app.include_router(occurrences.router)
 app.include_router(task_schedules.router)
 app.include_router(memos.router)
 app.include_router(plan.router)

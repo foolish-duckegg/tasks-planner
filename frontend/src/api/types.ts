@@ -138,7 +138,7 @@ export interface FixedBlock {
   recurrence_value: number | null
   start_minute: number
   end_minute: number
-  effective_from: string | null
+  effective_from: string
   effective_to: string | null
   overlap_priority: number
   allow_task_schedule: boolean
@@ -155,7 +155,7 @@ export interface FixedBlockCreate {
   recurrence_value?: number | null
   start_minute: number
   end_minute: number
-  effective_from?: string | null
+  effective_from: string
   effective_to?: string | null
   overlap_priority?: number
   allow_task_schedule?: boolean
@@ -169,7 +169,7 @@ export interface FixedBlockUpdate {
   recurrence_value?: number | null
   start_minute?: number
   end_minute?: number
-  effective_from?: string | null
+  effective_from?: string
   effective_to?: string | null
   overlap_priority?: number
   allow_task_schedule?: boolean
@@ -273,6 +273,42 @@ export interface FixedOccurrence {
   overlap_priority: number
   allow_task_schedule: boolean
   remark: string | null
+}
+
+export type FixedOccurrenceStatus = 'done' | 'skipped' | 'missed'
+
+export interface FixedBlockOccurrence extends FixedOccurrence {
+  status: FixedOccurrenceStatus | null
+  log_id: number | null
+  note: string | null
+  is_past: boolean
+}
+
+export interface FixedBlockOccurrenceListParams {
+  date_from?: string | null
+  date_to?: string | null
+  fixed_block_id?: number | null
+  status?: FixedOccurrenceStatus | 'unmarked' | 'pending' | null
+  limit?: number
+  offset?: number
+}
+
+export interface FixedBlockOccurrenceStatusPayload {
+  fixed_block_id: number
+  date: string
+  status: FixedOccurrenceStatus
+  note?: string | null
+}
+
+export interface FixedBlockOccurrenceLog {
+  id: number
+  fixed_block_id: number
+  occurrence_date: string
+  status: FixedOccurrenceStatus
+  note: string | null
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
 }
 
 export interface TaskListParams {

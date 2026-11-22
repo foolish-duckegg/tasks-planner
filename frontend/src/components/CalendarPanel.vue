@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 
-import type { DayBlock, TaskSchedule } from '@/api/types'
+import type { DayBlock, FixedBlockOccurrence, TaskSchedule } from '@/api/types'
 import type { CalendarDay, CalendarViewMode } from '@/composables/useCalendar'
 import DayTimeline from '@/components/DayTimeline.vue'
 import MonthCalendar from '@/components/MonthCalendar.vue'
+import OccurrenceStatusDialog from '@/components/OccurrenceStatusDialog.vue'
 import WeekCalendar from '@/components/WeekCalendar.vue'
 import { addDays, addMonths, todayInTimezone } from '@/utils/time'
 
@@ -31,9 +32,24 @@ const emit = defineEmits<{
   (event: 'update:view', value: CalendarViewMode): void
   (event: 'update:date', value: string): void
   (event: 'select-schedule', value: TaskSchedule): void
+  (event: 'occurrence-updated'): void
 }>()
 
 const { t } = useI18n()
+
+const statusOpen = ref(false)
+const statusTarget = ref<{
+  occurrence: FixedBlockOccurrence
+  date: string
+} | null>(null)
+
+function openOccurrenceStatus(value: {
+  occurrence: FixedBlockOccurrence
+  date: string
+}) {
+  statusTarget.value = value
+  statusOpen.value = true
+}
 
 const viewOptions = computed<Array<{ label: string; value: CalendarViewMode }>>(() => [
   { label: t('calendar.day'), value: 'day' },
@@ -132,6 +148,7 @@ function selectDay(value: string) {
       :locale="locale"
       :timezone="timezone"
       @select-schedule="emit('select-schedule', $event)"
+      @select-occurrence="openOccurrenceStatus"
     />
 
     <WeekCalendar
@@ -142,6 +159,7 @@ function selectDay(value: string) {
       :locale="locale"
       :timezone="timezone"
       @select-schedule="emit('select-schedule', $event)"
+      @select-occurrence="openOccurrenceStatus"
       @select-day="selectDay"
     />
 
@@ -153,6 +171,13 @@ function selectDay(value: string) {
       :timezone="timezone"
       @select-schedule="emit('select-schedule', $event)"
       @select-day="selectDay"
+    />
+
+    <OccurrenceStatusDialog
+      v-model="statusOpen"
+      :occurrence="statusTarget?.occurrence ?? null"
+      :date="statusTarget?.date ?? ''"
+      @updated="emit('occurrence-updated')"
     />
   </div>
 </template>

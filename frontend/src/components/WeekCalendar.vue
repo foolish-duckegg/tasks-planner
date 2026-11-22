@@ -3,7 +3,11 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 
-import type { DayBlock, FixedOccurrence, TaskSchedule } from '@/api/types'
+import type {
+  DayBlock,
+  FixedBlockOccurrence,
+  TaskSchedule,
+} from '@/api/types'
 import type { CalendarDay } from '@/composables/useCalendar'
 import { kindColor, withAlpha } from '@/utils/colors'
 import {
@@ -30,6 +34,10 @@ const props = withDefaults(
 const emit = defineEmits<{
   (event: 'select-schedule', value: TaskSchedule): void
   (event: 'select-day', value: string): void
+  (
+    event: 'select-occurrence',
+    value: { occurrence: FixedBlockOccurrence; date: string },
+  ): void
 }>()
 
 const { t } = useI18n()
@@ -109,7 +117,27 @@ function scheduleColor(schedule: TaskSchedule) {
   return '#00b8d9'
 }
 
-function occurrenceKey(occurrence: FixedOccurrence, index: number) {
+function occurrenceColor(occurrence: FixedBlockOccurrence) {
+  if (occurrence.status === 'done') {
+    return '#16a34a'
+  }
+  if (occurrence.status === 'skipped') {
+    return '#9a9eb5'
+  }
+  if (occurrence.status === 'missed') {
+    return '#ef4444'
+  }
+  return '#6d5dfc'
+}
+
+function occurrenceTitle(occurrence: FixedBlockOccurrence) {
+  const base = `${occurrence.title} ${minutesToTime(occurrence.start_minute)}–${minutesToTime(occurrence.end_minute)}`
+  return occurrence.status
+    ? `${base} · ${t(`occurrenceStatus.${occurrence.status}`)}`
+    : base
+}
+
+function occurrenceKey(occurrence: FixedBlockOccurrence, index: number) {
   return `fixed-${occurrence.fixed_block_id}-${occurrence.start_minute}-${index}`
 }
 
@@ -188,9 +216,16 @@ onUnmounted(() => {
               v-for="(occurrence, index) in day.occurrences"
               :key="occurrenceKey(occurrence, index)"
               class="event fixed"
-              :style="eventStyle(occurrence.start_minute, occurrence.end_minute, '#6d5dfc')"
-              :title="`${occurrence.title} ${minutesToTime(occurrence.start_minute)}–${minutesToTime(occurrence.end_minute)}`"
+              :class="occurrence.status"
+              :style="eventStyle(occurrence.start_minute, occurrence.end_minute, occurrenceColor(occurrence))"
+              :title="occurrenceTitle(occurrence)"
+              @click.stop="emit('select-occurrence', { occurrence, date: day.date })"
             >
+              <span
+                v-if="occurrence.status"
+                class="event-status-dot"
+                :class="occurrence.status"
+              />
               <span class="event-title">{{ occurrence.title }}</span>
               <span class="event-time">
                 {{ minutesToTime(occurrence.start_minute) }}–{{ minutesToTime(occurrence.end_minute) }}
@@ -435,10 +470,39 @@ onUnmounted(() => {
     box-shadow 0.16s ease;
 }
 
-.event.task:hover {
+.event.fixed {
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.event.task:hover,
+.event.fixed:hover {
   transform: translateX(-2px);
   box-shadow: 0 8px 18px -14px rgba(15, 16, 32, 0.7);
   z-index: 4;
+}
+
+.event-status-dot {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.event-status-dot.done {
+  background: #16a34a;
+}
+
+.event-status-dot.skipped {
+  background: #9a9eb5;
+}
+
+.event-status-dot.missed {
+  background: #ef4444;
 }
 
 .event.skipped {
