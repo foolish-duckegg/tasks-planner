@@ -250,6 +250,24 @@ def schedule_rows(items: list[dict[str, Any]]) -> str:
     )
 
 
+def occurrence_rows(items: list[dict[str, Any]]) -> str:
+    return table(
+        ["LOG", "BLOCK", "DATE", "TIME", "STATUS", "TITLE", "NOTE"],
+        [
+            [
+                i.get("log_id") or "-",
+                i["fixed_block_id"],
+                i["date"],
+                fmt_range(i["start_minute"], i["end_minute"]),
+                i.get("status") or "unmarked",
+                i["title"],
+                i.get("note"),
+            ]
+            for i in items
+        ],
+    )
+
+
 def render_memo(memo: dict[str, Any]) -> str:
     return key_values(
         {
@@ -577,6 +595,57 @@ def cmd_fixed_list(args: argparse.Namespace, client: ApiClient) -> None:
     emit(args, client.get("/fixed-blocks", params), fixed_rows)
 
 
+def cmd_fixed_occurrences(args: argparse.Namespace, client: ApiClient) -> None:
+    params = {
+        "date_from": resolve_date(args.date_from) if args.date_from else None,
+        "date_to": resolve_date(args.date_to) if args.date_to else None,
+        "fixed_block_id": args.block,
+        "status": args.status,
+        "limit": args.limit,
+        "offset": args.offset,
+    }
+    emit(args, client.get("/fixed-block-occurrences", params), occurrence_rows)
+
+
+def cmd_fixed_pending(args: argparse.Namespace, client: ApiClient) -> None:
+    params = {
+        "date_from": resolve_date(args.date_from) if args.date_from else None,
+        "date_to": resolve_date(args.date_to) if args.date_to else None,
+        "fixed_block_id": args.block,
+        "status": "pending",
+        "limit": args.limit,
+        "offset": args.offset,
+    }
+    emit(args, client.get("/fixed-block-occurrences", params), occurrence_rows)
+
+
+def cmd_fixed_mark(args: argparse.Namespace, client: ApiClient) -> None:
+    payload = {
+        "fixed_block_id": args.id,
+        "date": resolve_date(args.date),
+        "status": args.status,
+        "note": args.note,
+    }
+    emit(
+        args,
+        client.put("/fixed-block-occurrences", payload),
+        lambda item: key_values(item),
+    )
+
+
+def cmd_fixed_unmark(args: argparse.Namespace, client: ApiClient) -> None:
+    on_date = resolve_date(args.date)
+    client.delete(
+        "/fixed-block-occurrences",
+        params={"fixed_block_id": args.id, "date": on_date},
+    )
+    emit(
+        args,
+        {"fixed_block_id": args.id, "date": on_date},
+        lambda data: f"cleared fixed block #{data['fixed_block_id']} @ {data['date']}",
+    )
+
+
 def cmd_fixed_get(args: argparse.Namespace, client: ApiClient) -> None:
     emit(args, client.get(f"/fixed-blocks/{args.id}"), lambda item: key_values(item))
 
@@ -588,8 +657,8 @@ def fixed_payload(args: argparse.Namespace) -> dict[str, Any]:
         "recurrence_value": args.value,
         "start_minute": parse_minute(args.start) if args.start is not None else None,
         "end_minute": parse_minute(args.end, end=True) if args.end is not None else None,
-        "effective_from": args.date_from,
-        "effective_to": args.date_to,
+        "effective_from": resolve_date(args.date_from) if args.date_from else None,
+        "effective_to": resolve_date(args.date_to) if args.date_to else None,
         "overlap_priority": args.overlap_priority,
         "allow_task_schedule": args.allow_task_schedule,
         "remark": args.remark,
@@ -623,11 +692,10 @@ def cmd_fixed_update(args: argparse.Namespace, client: ApiClient) -> None:
     if args.end is not None:
         payload["end_minute"] = parse_minute(args.end, end=True)
     if args.date_from is not None:
-        payload["effective_from"] = args.date_from
+        payload["effective_from"] = resolve_date(args.date_from)
     if args.date_to is not None:
-        payload["effective_to"] = args.date_to
+        payload["effective_to"] = resolve_date(args.date_to)
     if args.clear_effective:
-        payload["effective_from"] = None
         payload["effective_to"] = None
     if args.overlap_priority is not None:
         payload["overlap_priority"] = args.overlap_priority
@@ -989,7 +1057,14 @@ def build_parser() -> argparse.ArgumentParser:
     task_list.add_argument("--all", action="store_true", help="包含软删除")
     task_list.add_argument("--limit", type=int, default=100)
     task_list.add_argument("--offset", type=int, default=0)
-    task_unscheduled = task_sub.add_parser("unscheduled", help="列出未排期任务")
+    task_unscheduled = task_sub.add_parser(
+        "unscheduled",
+        help="列出从现在起往后没有有效排期的任务",
+        description=(
+            "未排期任务：从现在起往后没有未删除、未跳过的排期，"
+            "且任务状态不是 done/cancelled。"
+        ),
+    )
     task_unscheduled.add_argument(
         "--priority", action="append", help="优先级 id/level/name，可重复传多个（OR）"
     )
@@ -1070,7 +1145,11 @@ def build_parser() -> argparse.ArgumentParser:
     fixed_add.add_argument("--value", type=int, help="weekly: 1..7；monthly: 1..31")
     fixed_add.add_argument("--start", required=True)
     fixed_add.add_argument("--end", required=True)
-    fixed_add.add_argument("--from", dest="date_from", help="生效起始日期 YYYY-MM-DD")
+    fixed_add.add_argument(
+        "--from",
+        dest="date_from",
+        help="生效起始日期 YYYY-MM-DD，不传则默认服务端当天",
+    )
     fixed_add.add_argument("--to", dest="date_to", help="生效结束日期 YYYY-MM-DD")
     fixed_add.add_argument("--overlap-priority", type=int, default=0)
     fixed_add.add_argument("--allow-task-schedule", dest="allow_task_schedule", action="store_true", help="允许在该固定块内添加任务排期")
@@ -1087,7 +1166,7 @@ def build_parser() -> argparse.ArgumentParser:
     fixed_update.add_argument("--end")
     fixed_update.add_argument("--from", dest="date_from")
     fixed_update.add_argument("--to", dest="date_to")
-    fixed_update.add_argument("--clear-effective", action="store_true")
+    fixed_update.add_argument("--clear-effective", "--clear-effective-to", dest="clear_effective", action="store_true", help="清空生效结束日期 effective_to")
     fixed_update.add_argument("--overlap-priority", type=int)
     fixed_update.add_argument("--allow-task-schedule", dest="allow_task_schedule", action="store_true")
     fixed_update.add_argument("--no-task-schedule", dest="allow_task_schedule", action="store_false")
@@ -1098,6 +1177,31 @@ def build_parser() -> argparse.ArgumentParser:
     fixed_delete.add_argument("id", type=int)
     fixed_restore = fixed_sub.add_parser("restore", help="恢复固定块")
     fixed_restore.add_argument("id", type=int)
+    fixed_occurrences = fixed_sub.add_parser("occurrences", help="列出固定块发生实例及状态")
+    fixed_occurrences.add_argument("--from", dest="date_from", help="起始日期，默认最早生效日")
+    fixed_occurrences.add_argument("--to", dest="date_to", help="结束日期，默认今天")
+    fixed_occurrences.add_argument("--block", type=int, help="固定块 ID")
+    fixed_occurrences.add_argument(
+        "--status",
+        choices=["done", "skipped", "missed", "unmarked", "pending"],
+        help="按状态筛选；pending=已过时间且未完成/未跳过",
+    )
+    fixed_occurrences.add_argument("--limit", type=int, default=500)
+    fixed_occurrences.add_argument("--offset", type=int, default=0)
+    fixed_pending = fixed_sub.add_parser("pending", help="列出已过时间且未完成/未跳过的固定块")
+    fixed_pending.add_argument("--from", dest="date_from", help="起始日期，默认最早生效日")
+    fixed_pending.add_argument("--to", dest="date_to", help="结束日期，默认今天")
+    fixed_pending.add_argument("--block", type=int, help="固定块 ID")
+    fixed_pending.add_argument("--limit", type=int, default=500)
+    fixed_pending.add_argument("--offset", type=int, default=0)
+    fixed_mark = fixed_sub.add_parser("mark", help="标记某次固定块状态")
+    fixed_mark.add_argument("id", type=int, help="固定块 ID")
+    fixed_mark.add_argument("date", help="发生日期 YYYY-MM-DD，或 today/yesterday")
+    fixed_mark.add_argument("status", choices=["done", "skipped", "missed"])
+    fixed_mark.add_argument("--note")
+    fixed_unmark = fixed_sub.add_parser("unmark", help="清除某次固定块状态")
+    fixed_unmark.add_argument("id", type=int, help="固定块 ID")
+    fixed_unmark.add_argument("date", help="发生日期 YYYY-MM-DD，或 today/yesterday")
 
     exception = sub.add_parser("exception", help="固定块例外（跳过）")
     exception_sub = exception.add_subparsers(dest="action", required=True)
@@ -1228,6 +1332,10 @@ def build_parser() -> argparse.ArgumentParser:
         ("fixed", "update"): cmd_fixed_update,
         ("fixed", "delete"): cmd_fixed_delete,
         ("fixed", "restore"): cmd_fixed_restore,
+        ("fixed", "occurrences"): cmd_fixed_occurrences,
+        ("fixed", "pending"): cmd_fixed_pending,
+        ("fixed", "mark"): cmd_fixed_mark,
+        ("fixed", "unmark"): cmd_fixed_unmark,
         ("exception", "list"): cmd_exception_list,
         ("exception", "get"): cmd_exception_get,
         ("exception", "add"): cmd_exception_add,

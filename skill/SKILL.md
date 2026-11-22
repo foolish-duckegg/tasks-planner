@@ -32,7 +32,7 @@ nohup .venv/bin/python run.py > /tmp/tasks-planner-api.log 2>&1 &
 | 概念 | 说明 |
 |---|---|
 | 任务 task | 标题、优先级、状态、截止时间、进度文字、备注 |
-| 状态 status | 内置 `todo/doing/blocked/done/cancelled`（id 1..5）。**「未排期」不是状态**，是 `GET /tasks/unscheduled` 的查询结果 |
+| 状态 status | 内置 `todo/doing/blocked/done/cancelled`（id 1..5）。**「未排期」不是状态**，是 `GET /tasks/unscheduled` 的查询结果：从现在起往后没有有效排期（过去和 skipped 不算） |
 | 优先级 priority | 用户自定义，`level=1` 最高 |
 | 每日模板 day block | 每天的固定时间划分，如 09:00-12:00 工作；全库共用一份 |
 | 固定块 fixed block | 每天/每周/每月重复的日程，如周会、健身；优先级高于模板与排期 |
@@ -64,7 +64,7 @@ nohup .venv/bin/python run.py > /tmp/tasks-planner-api.log 2>&1 &
 tp --json task list --open
 tp --json task list --status todo
 tp --json task list --status todo --status doing --priority P1 --priority P2
-tp --json task unscheduled      # 未排期池：没有任何未删除排期的任务
+tp --json task unscheduled      # 未排期池：从现在起往后没有任何有效排期（skipped 不算）
 tp --json plan day 2026-11-20
 ```
 

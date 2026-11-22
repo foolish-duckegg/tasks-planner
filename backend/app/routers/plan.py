@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, Query
 
@@ -44,73 +44,116 @@ def _subtract(
     return segments
 
 
-def compute_fixed_occurrences(
-    conn: sqlite3.Connection,
-    on_date: date,
-) -> list[dict]:
-    date_str = on_date.isoformat()
-    iso_weekday = on_date.isoweekday()
-    day_of_month = on_date.day
-
-    blocks = fetch_all(
+def _load_active_blocks(conn: sqlite3.Connection) -> list[dict]:
+    return fetch_all(
         conn,
         """
         SELECT *
         FROM fixed_blocks
         WHERE is_active = 1
           AND deleted_at IS NULL
-          AND (effective_from IS NULL OR effective_from <= ?)
-          AND (effective_to   IS NULL OR effective_to   >= ?)
-          AND (
-                recurrence = 'daily'
-            OR (recurrence = 'weekly'  AND recurrence_value = ?)
-            OR (recurrence = 'monthly' AND recurrence_value = ?)
-          )
         ORDER BY overlap_priority DESC, id
         """,
-        (date_str, date_str, iso_weekday, day_of_month),
     )
 
+
+def _load_active_exceptions(
+    conn: sqlite3.Connection,
+) -> dict[int, list[dict]]:
+    rows = fetch_all(
+        conn,
+        """
+        SELECT *
+        FROM fixed_block_exceptions
+        WHERE is_active = 1
+          AND deleted_at IS NULL
+        ORDER BY id
+        """,
+    )
+    grouped: dict[int, list[dict]] = {}
+    for row in rows:
+        grouped.setdefault(row["fixed_block_id"], []).append(row)
+    return grouped
+
+
+def _block_matches(block: dict, on_date: date) -> bool:
+    date_str = on_date.isoformat()
+    effective_from = block["effective_from"]
+    if effective_from is not None and effective_from > date_str:
+        return False
+    effective_to = block["effective_to"]
+    if effective_to is not None and effective_to < date_str:
+        return False
+    recurrence = block["recurrence"]
+    if recurrence == "daily":
+        return True
+    if recurrence == "weekly":
+        return block["recurrence_value"] == on_date.isoweekday()
+    if recurrence == "monthly":
+        return block["recurrence_value"] == on_date.day
+    return False
+
+
+def _exception_cuts(
+    block: dict,
+    exceptions: list[dict],
+    on_date: date,
+) -> list[tuple[int, int]]:
+    date_str = on_date.isoformat()
+    iso_weekday = on_date.isoweekday()
+    day_of_month = on_date.day
+    cuts: list[tuple[int, int]] = []
+    for exception in exceptions:
+        if (
+            exception["effective_from"] is not None
+            and exception["effective_from"] > date_str
+        ):
+            continue
+        if (
+            exception["effective_to"] is not None
+            and exception["effective_to"] < date_str
+        ):
+            continue
+        if (
+            exception["skip_date"] is not None
+            and exception["skip_date"] != date_str
+        ):
+            continue
+        if (
+            exception["weekday"] is not None
+            and exception["weekday"] != iso_weekday
+        ):
+            continue
+        if (
+            exception["day_of_month"] is not None
+            and exception["day_of_month"] != day_of_month
+        ):
+            continue
+        if (
+            exception["start_minute"] is None
+            or exception["end_minute"] is None
+        ):
+            cuts.append((block["start_minute"], block["end_minute"]))
+            continue
+        cut_start = max(block["start_minute"], exception["start_minute"])
+        cut_end = min(block["end_minute"], exception["end_minute"])
+        if cut_start < cut_end:
+            cuts.append((cut_start, cut_end))
+    return cuts
+
+
+def _occurrences_for_date(
+    blocks: list[dict],
+    exceptions_by_block: dict[int, list[dict]],
+    on_date: date,
+) -> list[dict]:
     occurrences: list[dict] = []
     for block in blocks:
-        exceptions = fetch_all(
-            conn,
-            """
-            SELECT *
-            FROM fixed_block_exceptions
-            WHERE fixed_block_id = ?
-              AND is_active = 1
-              AND deleted_at IS NULL
-              AND (effective_from IS NULL OR effective_from <= ?)
-              AND (effective_to   IS NULL OR effective_to   >= ?)
-              AND (skip_date      IS NULL OR skip_date      = ?)
-              AND (weekday        IS NULL OR weekday        = ?)
-              AND (day_of_month   IS NULL OR day_of_month   = ?)
-            ORDER BY id
-            """,
-            (
-                block["id"],
-                date_str,
-                date_str,
-                date_str,
-                iso_weekday,
-                day_of_month,
-            ),
+        if not _block_matches(block, on_date):
+            continue
+        cuts = _exception_cuts(
+            block, exceptions_by_block.get(block["id"], []), on_date
         )
-
-        cuts: list[tuple[int, int]] = []
-        for exception in exceptions:
-            if (
-                exception["start_minute"] is None
-                or exception["end_minute"] is None
-            ):
-                cuts.append((block["start_minute"], block["end_minute"]))
-                continue
-            cut_start = max(block["start_minute"], exception["start_minute"])
-            cut_end = min(block["end_minute"], exception["end_minute"])
-            if cut_start < cut_end:
-                cuts.append((cut_start, cut_end))
-
         for seg_start, seg_end in _subtract(
             block["start_minute"], block["end_minute"], _merge_intervals(cuts)
         ):
@@ -134,6 +177,34 @@ def compute_fixed_occurrences(
             item["fixed_block_id"],
         )
     )
+    return occurrences
+
+
+def compute_fixed_occurrences(
+    conn: sqlite3.Connection,
+    on_date: date,
+) -> list[dict]:
+    return _occurrences_for_date(
+        _load_active_blocks(conn),
+        _load_active_exceptions(conn),
+        on_date,
+    )
+
+
+def compute_fixed_occurrences_range(
+    conn: sqlite3.Connection,
+    start: date,
+    end: date,
+) -> list[dict]:
+    blocks = _load_active_blocks(conn)
+    exceptions_by_block = _load_active_exceptions(conn)
+    occurrences: list[dict] = []
+    current = start
+    while current <= end:
+        occurrences.extend(
+            _occurrences_for_date(blocks, exceptions_by_block, current)
+        )
+        current += timedelta(days=1)
     return occurrences
 
 

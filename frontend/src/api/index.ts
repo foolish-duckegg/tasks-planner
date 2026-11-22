@@ -12,6 +12,10 @@ import type {
   FixedBlockExceptionCreate,
   FixedBlockExceptionUpdate,
   FixedBlockListParams,
+  FixedBlockOccurrence,
+  FixedBlockOccurrenceListParams,
+  FixedBlockOccurrenceLog,
+  FixedBlockOccurrenceStatusPayload,
   FixedBlockUpdate,
   FixedOccurrence,
   LookupListParams,
@@ -136,6 +140,19 @@ export const api = {
       unwrap<void>(http.delete(`/fixed-block-exceptions/${id}`)),
     restore: (id: number) =>
       unwrap<FixedBlockException>(http.post(`/fixed-block-exceptions/${id}/restore`)),
+  },
+
+  fixedBlockOccurrences: {
+    list: (params?: FixedBlockOccurrenceListParams) =>
+      unwrap<FixedBlockOccurrence[]>(
+        http.get('/fixed-block-occurrences', { params }),
+      ),
+    setStatus: (payload: FixedBlockOccurrenceStatusPayload) =>
+      unwrap<FixedBlockOccurrenceLog>(
+        http.put('/fixed-block-occurrences', payload),
+      ),
+    clearStatus: (params: { fixed_block_id: number; date: string }) =>
+      unwrap<void>(http.delete('/fixed-block-occurrences', { params })),
   },
 
   schedules: {

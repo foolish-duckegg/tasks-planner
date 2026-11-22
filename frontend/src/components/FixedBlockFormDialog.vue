@@ -21,13 +21,20 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+function todayString(): string {
+  const now = new Date()
+  const offset = now.getTimezoneOffset() * 60000
+  return new Date(now.getTime() - offset).toISOString().slice(0, 10)
+}
+
 const form = reactive({
   title: '',
   recurrence: 'weekly' as Recurrence,
   recurrence_value: 1 as number | null,
   start_minute: 10 * 60 as number | null,
   end_minute: 11 * 60 as number | null,
-  effective_from: null as string | null,
+  effective_from: todayString(),
   effective_to: null as string | null,
   overlap_priority: 0,
   allow_task_schedule: true,
@@ -53,7 +60,7 @@ function resetForm() {
   form.recurrence_value = block?.recurrence_value ?? (form.recurrence === 'daily' ? null : 1)
   form.start_minute = block?.start_minute ?? 10 * 60
   form.end_minute = block?.end_minute ?? 11 * 60
-  form.effective_from = block?.effective_from ?? null
+  form.effective_from = block?.effective_from ?? todayString()
   form.effective_to = block?.effective_to ?? null
   form.overlap_priority = block?.overlap_priority ?? 0
   form.allow_task_schedule = block?.allow_task_schedule ?? true
@@ -82,6 +89,10 @@ async function submit() {
     ElMessage.warning(t('fixedBlocks.recurrenceValueRequired'))
     return
   }
+  if (!form.effective_from) {
+    ElMessage.warning(t('fixedBlocks.effectiveFromRequired'))
+    return
+  }
 
   const payload: FixedBlockCreate = {
     title: form.title.trim(),
@@ -89,7 +100,7 @@ async function submit() {
     recurrence_value: form.recurrence === 'daily' ? null : form.recurrence_value,
     start_minute: form.start_minute,
     end_minute: form.end_minute,
-    effective_from: form.effective_from || null,
+    effective_from: form.effective_from,
     effective_to: form.effective_to || null,
     overlap_priority: form.overlap_priority,
     allow_task_schedule: form.allow_task_schedule,
@@ -174,12 +185,11 @@ async function submit() {
       </div>
 
       <div class="form-grid">
-        <el-form-item :label="t('fixedBlocks.effectiveFrom')">
+        <el-form-item :label="t('fixedBlocks.effectiveFrom')" required>
           <el-date-picker
             v-model="form.effective_from"
             type="date"
             value-format="YYYY-MM-DD"
-            clearable
           />
         </el-form-item>
         <el-form-item :label="t('fixedBlocks.effectiveTo')">

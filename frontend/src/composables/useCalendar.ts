@@ -2,14 +2,14 @@ import { computed, ref, watch, type Ref } from 'vue'
 import dayjs from 'dayjs'
 
 import { api } from '@/api'
-import type { DayBlock, FixedOccurrence, TaskSchedule } from '@/api/types'
+import type { DayBlock, FixedBlockOccurrence, TaskSchedule } from '@/api/types'
 import { addDays } from '@/utils/time'
 
 export type CalendarViewMode = 'day' | 'week' | 'month'
 
 export interface CalendarDay {
   date: string
-  occurrences: FixedOccurrence[]
+  occurrences: FixedBlockOccurrence[]
   schedules: TaskSchedule[]
 }
 
@@ -47,7 +47,7 @@ function duration(start: number, end: number): number {
 
 export function useCalendar(options: UseCalendarOptions) {
   const dayBlocks = ref<DayBlock[]>([])
-  const occurrencesByDate = ref<Record<string, FixedOccurrence[]>>({})
+  const occurrencesByDate = ref<Record<string, FixedBlockOccurrence[]>>({})
   const schedulesByDate = ref<Record<string, TaskSchedule[]>>({})
   const loading = ref(false)
   const loadedBlocks = ref(false)
@@ -126,13 +126,21 @@ export function useCalendar(options: UseCalendarOptions) {
         : dates.filter((date) => !(date in occurrencesByDate.value))
       const shouldLoadBlocks = force || !loadedBlocks.value
       const shouldLoadSchedules = force || !loadedSchedules.value
+      const occurrenceRange =
+        missing.length > 0
+          ? api.fixedBlockOccurrences.list({
+              date_from: missing[0],
+              date_to: missing[missing.length - 1],
+              limit: 5000,
+            })
+          : Promise.resolve(null)
 
-      const [blocks, scheduleList, occurrenceLists] = await Promise.all([
+      const [blocks, scheduleList, occurrenceList] = await Promise.all([
         shouldLoadBlocks
           ? api.dayBlocks.list({ active_only: true })
           : Promise.resolve(null),
         shouldLoadSchedules ? api.schedules.list() : Promise.resolve(null),
-        Promise.all(missing.map((date) => api.plan.fixedOccurrences(date))),
+        occurrenceRange,
       ])
 
       if (current !== requestId) {
@@ -144,9 +152,20 @@ export function useCalendar(options: UseCalendarOptions) {
         loadedBlocks.value = true
       }
 
-      missing.forEach((date, index) => {
-        occurrencesByDate.value[date] = occurrenceLists[index]
-      })
+      if (occurrenceList) {
+        const grouped: Record<string, FixedBlockOccurrence[]> = {}
+        for (const occurrence of occurrenceList) {
+          const bucket = grouped[occurrence.date]
+          if (bucket) {
+            bucket.push(occurrence)
+          } else {
+            grouped[occurrence.date] = [occurrence]
+          }
+        }
+        for (const date of missing) {
+          occurrencesByDate.value[date] = grouped[date] ?? []
+        }
+      }
 
       if (scheduleList) {
         const grouped: Record<string, TaskSchedule[]> = {}

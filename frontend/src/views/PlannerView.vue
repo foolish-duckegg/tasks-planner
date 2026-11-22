@@ -194,6 +194,7 @@ onMounted(async () => {
         :locale="ui.locale"
         :timezone="app.timezone"
         @select-schedule="openSchedule"
+        @occurrence-updated="reload"
       />
 
       <div v-if="view === 'day'" class="stack">

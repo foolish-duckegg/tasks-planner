@@ -2,7 +2,11 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type { DayBlock, FixedOccurrence, TaskSchedule } from '@/api/types'
+import type {
+  DayBlock,
+  FixedBlockOccurrence,
+  TaskSchedule,
+} from '@/api/types'
 import { formatDateLabel, minutesToTime, todayInTimezone } from '@/utils/time'
 import { kindColor, withAlpha } from '@/utils/colors'
 
@@ -10,7 +14,7 @@ const props = withDefaults(
   defineProps<{
     date: string
     dayBlocks: DayBlock[]
-    occurrences: FixedOccurrence[]
+    occurrences: FixedBlockOccurrence[]
     schedules: TaskSchedule[]
     locale?: string
     timezone?: string
@@ -23,6 +27,10 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (event: 'select-schedule', value: TaskSchedule): void
+  (
+    event: 'select-occurrence',
+    value: { occurrence: FixedBlockOccurrence; date: string },
+  ): void
 }>()
 
 const { t } = useI18n()
@@ -103,6 +111,30 @@ function scheduleColor(schedule: TaskSchedule) {
   }
   return '#00b8d9'
 }
+
+function occurrenceColor(occurrence: FixedBlockOccurrence) {
+  if (occurrence.status === 'done') {
+    return '#16a34a'
+  }
+  if (occurrence.status === 'skipped') {
+    return '#9a9eb5'
+  }
+  if (occurrence.status === 'missed') {
+    return '#ef4444'
+  }
+  return '#6d5dfc'
+}
+
+function occurrenceTitle(occurrence: FixedBlockOccurrence) {
+  const base = `${occurrence.title} ${minutesToTime(occurrence.start_minute)}–${minutesToTime(occurrence.end_minute)}`
+  return occurrence.status
+    ? `${base} · ${t(`occurrenceStatus.${occurrence.status}`)}`
+    : base
+}
+
+function selectOccurrence(occurrence: FixedBlockOccurrence) {
+  emit('select-occurrence', { occurrence, date: props.date })
+}
 </script>
 
 <template>
@@ -147,9 +179,16 @@ function scheduleColor(schedule: TaskSchedule) {
             v-for="(occurrence, index) in fixedOccurrences"
             :key="`fixed-${occurrence.fixed_block_id}-${index}`"
             class="event fixed"
-            :style="eventStyle(occurrence.start_minute, occurrence.end_minute, '#6d5dfc')"
-            :title="`${occurrence.title} ${minutesToTime(occurrence.start_minute)}–${minutesToTime(occurrence.end_minute)}`"
+            :class="occurrence.status"
+            :style="eventStyle(occurrence.start_minute, occurrence.end_minute, occurrenceColor(occurrence))"
+            :title="occurrenceTitle(occurrence)"
+            @click.stop="selectOccurrence(occurrence)"
           >
+            <span
+              v-if="occurrence.status"
+              class="event-status-dot"
+              :class="occurrence.status"
+            />
             <span class="event-title">{{ occurrence.title }}</span>
             <span class="event-time">
               {{ minutesToTime(occurrence.start_minute) }}–{{ minutesToTime(occurrence.end_minute) }}
@@ -162,9 +201,16 @@ function scheduleColor(schedule: TaskSchedule) {
             v-for="(occurrence, index) in wideOccurrences"
             :key="`wide-${occurrence.fixed_block_id}-${index}`"
             class="event fixed wide"
-            :style="eventStyle(occurrence.start_minute, occurrence.end_minute, '#6d5dfc')"
-            :title="`${occurrence.title} ${minutesToTime(occurrence.start_minute)}–${minutesToTime(occurrence.end_minute)}`"
+            :class="occurrence.status"
+            :style="eventStyle(occurrence.start_minute, occurrence.end_minute, occurrenceColor(occurrence))"
+            :title="occurrenceTitle(occurrence)"
+            @click.stop="selectOccurrence(occurrence)"
           >
+            <span
+              v-if="occurrence.status"
+              class="event-status-dot"
+              :class="occurrence.status"
+            />
             <span class="event-title">{{ occurrence.title }}</span>
             <span class="event-time">
               {{ minutesToTime(occurrence.start_minute) }}–{{ minutesToTime(occurrence.end_minute) }}
@@ -331,6 +377,7 @@ function scheduleColor(schedule: TaskSchedule) {
   top: 0;
   bottom: 0;
   z-index: 2;
+  pointer-events: none;
 }
 
 .lane-fixed {
@@ -358,6 +405,7 @@ function scheduleColor(schedule: TaskSchedule) {
   overflow: hidden;
   cursor: default;
   backdrop-filter: blur(4px);
+  pointer-events: auto;
 }
 
 .event.task {
@@ -367,10 +415,39 @@ function scheduleColor(schedule: TaskSchedule) {
     box-shadow 0.16s ease;
 }
 
+.event.fixed {
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.event.fixed:hover,
 .event.task:hover {
   transform: translateX(-2px);
   box-shadow: 0 8px 18px -14px rgba(15, 16, 32, 0.7);
   z-index: 4;
+}
+
+.event-status-dot {
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.event-status-dot.done {
+  background: #16a34a;
+}
+
+.event-status-dot.skipped {
+  background: #9a9eb5;
+}
+
+.event-status-dot.missed {
+  background: #ef4444;
 }
 
 .event.skipped {

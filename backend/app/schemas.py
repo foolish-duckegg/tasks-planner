@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+DateType = date
+
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -212,7 +214,9 @@ class FixedBlockCreate(StrictModel):
     )
     start_minute: int = Field(..., ge=0, le=1439, description="开始分钟")
     end_minute: int = Field(..., ge=1, le=1440, description="结束分钟")
-    effective_from: date | None = Field(None, description="生效起始日期，含端点")
+    effective_from: date | None = Field(
+        None, description="生效起始日期，含端点；不传则默认为服务端当天"
+    )
     effective_to: date | None = Field(None, description="生效结束日期，含端点")
     overlap_priority: int = Field(0, description="固定块冲突时的优先级，越大越优先")
     allow_task_schedule: bool = Field(
@@ -268,7 +272,7 @@ class FixedBlockOut(OutModel):
     recurrence_value: int | None
     start_minute: int
     end_minute: int
-    effective_from: date | None
+    effective_from: date
     effective_to: date | None
     overlap_priority: int
     allow_task_schedule: bool
@@ -426,3 +430,43 @@ class FixedOccurrenceOut(BaseModel):
     overlap_priority: int
     allow_task_schedule: bool
     remark: str | None
+
+
+# ---------------------------------------------------------------------------
+# 固定块发生实例状态
+# ---------------------------------------------------------------------------
+class FixedBlockOccurrenceStatusUpdate(StrictModel):
+    fixed_block_id: int = Field(..., description="固定块 ID")
+    date: DateType = Field(..., description="发生日期 YYYY-MM-DD")
+    status: Literal["done", "skipped", "missed"] = Field(
+        ..., description="done=已完成，skipped=主动跳过，missed=未完成"
+    )
+    note: str | None = Field(None, description="备注")
+
+
+class FixedBlockOccurrenceLogOut(OutModel):
+    id: int
+    fixed_block_id: int
+    occurrence_date: date
+    status: str
+    note: str | None
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: datetime | None
+
+
+class FixedBlockOccurrenceOut(BaseModel):
+    fixed_block_id: int
+    title: str
+    date: date
+    start_minute: int
+    end_minute: int
+    overlap_priority: int
+    allow_task_schedule: bool
+    remark: str | None
+    status: str | None = Field(
+        None, description="done/skipped/missed；null 表示未标记"
+    )
+    log_id: int | None = None
+    note: str | None = None
+    is_past: bool = False

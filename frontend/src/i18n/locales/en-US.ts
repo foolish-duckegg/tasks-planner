@@ -84,6 +84,15 @@ export default {
     done: 'Done',
     skipped: 'Skipped',
   },
+  occurrenceStatus: {
+    title: 'Fixed block status',
+    updated: 'Status updated',
+    cleared: 'Status cleared',
+    done: 'Done',
+    skipped: 'Skipped',
+    missed: 'Missed',
+    clear: 'Clear status',
+  },
   memo: {
     title: 'Daily memo',
     add: 'Add memo',
@@ -276,6 +285,7 @@ export default {
     saved: 'Fixed block saved',
     deleteExceptionConfirm: 'Delete this exception?',
     recurrenceValueRequired: 'Please provide a recurrence value',
+    effectiveFromRequired: 'Please provide an effective-from date',
     timeInvalid: 'End time must be after start time',
     total: '{count} fixed blocks',
   },

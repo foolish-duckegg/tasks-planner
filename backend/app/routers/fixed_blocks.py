@@ -1,10 +1,18 @@
 import sqlite3
+from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from ..database import fetch_all, fetch_one, get_db
 from ..schemas import FixedBlockCreate, FixedBlockOut, FixedBlockUpdate
-from ..utils import date_to_db, get_or_404, restore_row, soft_delete, update_row
+from ..utils import (
+    date_to_db,
+    get_or_404,
+    get_timezone,
+    restore_row,
+    soft_delete,
+    update_row,
+)
 
 router = APIRouter(prefix="/api/fixed-blocks", tags=["fixed-blocks"])
 
@@ -68,6 +76,13 @@ def create_fixed_block(
     payload: FixedBlockCreate,
     conn: sqlite3.Connection = Depends(get_db),
 ) -> dict:
+    effective_from = payload.effective_from or datetime.now(
+        get_timezone(conn)
+    ).date()
+    if payload.effective_to is not None and effective_from > payload.effective_to:
+        raise HTTPException(
+            status_code=422, detail="effective_from 不能晚于 effective_to"
+        )
     cursor = conn.execute(
         """
         INSERT INTO fixed_blocks(
@@ -83,7 +98,7 @@ def create_fixed_block(
             payload.recurrence_value,
             payload.start_minute,
             payload.end_minute,
-            date_to_db(payload.effective_from),
+            date_to_db(effective_from),
             date_to_db(payload.effective_to),
             payload.overlap_priority,
             int(payload.allow_task_schedule),
@@ -124,6 +139,8 @@ def update_fixed_block(
 ) -> dict:
     row = get_or_404(conn, "fixed_blocks", block_id, "固定块不存在")
     changes = payload.model_dump(exclude_unset=True)
+    if "effective_from" in changes and changes["effective_from"] is None:
+        raise HTTPException(status_code=422, detail="effective_from 不能为 null")
     _merged_create(row, changes)
     update_row(conn, "fixed_blocks", block_id, changes)
     return _get_fixed_block(conn, block_id)

@@ -84,6 +84,15 @@ export default {
     done: '已完成',
     skipped: '已跳过',
   },
+  occurrenceStatus: {
+    title: '固定块状态',
+    updated: '状态已更新',
+    cleared: '状态已清除',
+    done: '已完成',
+    skipped: '跳过',
+    missed: '未完成',
+    clear: '清除状态',
+  },
   memo: {
     title: '当天备忘录',
     add: '新增备忘录',
@@ -276,6 +285,7 @@ export default {
     saved: '固定块已保存',
     deleteExceptionConfirm: '确定删除这个例外吗？',
     recurrenceValueRequired: '请填写重复值',
+    effectiveFromRequired: '请填写生效起始日期',
     timeInvalid: '结束时间必须晚于开始时间',
     total: '共 {count} 个固定块',
   },

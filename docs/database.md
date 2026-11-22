@@ -23,6 +23,7 @@ erDiagram
     task_statuses ||--o{ tasks : "状态"
     tasks ||--o{ task_schedules : "排期"
     fixed_blocks ||--o{ fixed_block_exceptions : "例外"
+    fixed_blocks ||--o{ fixed_block_occurrence_logs : "状态记录"
     day_blocks ||..o{ fixed_blocks : "固定块覆盖基础块（逻辑关系，无外键）"
 ```
 
@@ -30,8 +31,10 @@ erDiagram
 - `task_statuses` 1 : N `tasks`
 - `tasks` 1 : N `task_schedules`（可选）
 - `fixed_blocks` 1 : N `fixed_block_exceptions`
+- `fixed_blocks` 1 : N `fixed_block_occurrence_logs`
 - `day_blocks` 与 `fixed_blocks` 没有外键，二者在**查询时**按时间区间叠加。
 - `daily_memos` 是独立表，不与其它表建立外键关系。
+- `schema_migrations` 记录迁移版本，不与业务表建立外键关系。
 
 ## 3. 表说明
 
@@ -46,7 +49,7 @@ erDiagram
 
 | key | 初始值 | 含义 |
 |---|---|---|
-| `schema_version` | `1` | 结构版本，供升级脚本判断 |
+| `schema_version` | `2` | 当前结构版本，与 `schema_migrations` 最大版本一致 |
 | `timezone` | `Asia/Shanghai` | 展示与「今天」计算所用时区 |
 | `week_start` | `1` | 周起始日（ISO，1=周一），仅影响展示 |
 
@@ -171,7 +174,7 @@ INSERT INTO day_blocks(start_minute, end_minute, label, kind) VALUES
 | `recurrence_value` | INTEGER | 是 | NULL | 循环值，含义由 `recurrence` 决定，见下表 |
 | `start_minute` | INTEGER | 否 | - | 开始分钟，`0..1439` |
 | `end_minute` | INTEGER | 否 | - | 结束分钟，`1..1440`，必须大于开始 |
-| `effective_from` | TEXT | 是 | NULL | 生效起始日期（含），`YYYY-MM-DD` |
+| `effective_from` | TEXT | 否 | - | 生效起始日期（含），`YYYY-MM-DD`，必填，默认当天 |
 | `effective_to` | TEXT | 是 | NULL | 生效结束日期（含） |
 | `overlap_priority` | INTEGER | 否 | `0` | 固定块之间冲突时裁决，越大越优先 |
 | `allow_task_schedule` | INTEGER | 否 | `1` | 是否允许在该固定块时段内添加任务排期；`0` = 不允许 |
@@ -192,7 +195,8 @@ INSERT INTO day_blocks(start_minute, end_minute, label, kind) VALUES
 其他规则：
 
 - 周一、周三、周五各来一次 → 建 3 行，不引入子表。
-- `effective_from` / `effective_to` 为空表示长期有效；起止都含端点。
+- `effective_from` 必填，默认取当天；用户可显式设为更早日期（如 `1970-01-01`）。
+- `effective_to` 为空表示长期有效；起止都含端点。
 - 每月 29/30/31 日的块，在不存在该日的月份**当月跳过**，不顺延。
 - 不支持跨午夜；如 23:00–次日 01:00，拆成 `23:00–24:00` 和 `00:00–01:00` 两行（后者为 daily）。
 - 固定块之间允许重叠，读取时按 `overlap_priority DESC, id ASC` 排序，靠前者覆盖靠后者。
@@ -298,7 +302,30 @@ VALUES (1, 5, 620, 640);
 
 > 例外是用户显式操作，直接生效，**不受** `fixed_blocks.allow_task_schedule` 限制。固定块软删除后，其例外默认不返回；恢复固定块后继续生效。
 
-### 3.10 软删除约定
+### 3.10 `fixed_block_occurrence_logs` 固定块发生实例状态
+
+记录某个固定块在**某一天**的实际状态。固定块是重复规则，occurrence 是按日期实时算出来的；这张表只保存用户显式标记过的实例。
+
+| 字段 | 类型 | 空 | 默认 | 说明 |
+|---|---|---|---|---|
+| `id` | INTEGER | 否 | 自增 | 主键 |
+| `fixed_block_id` | INTEGER | 否 | - | 外键 → `fixed_blocks.id`，物理删除时级联删除 |
+| `occurrence_date` | TEXT | 否 | - | 具体日期 `YYYY-MM-DD` |
+| `status` | TEXT | 否 | - | `done` / `skipped` / `missed` |
+| `note` | TEXT | 是 | NULL | 备注 |
+| `deleted_at` | TEXT | 是 | NULL | 软删除时间（UTC），NULL = 未删除 |
+| `created_at` | TEXT | 否 | `datetime('now')` | 创建时间 |
+| `updated_at` | TEXT | 否 | `datetime('now')` | 更新时间 |
+
+规则：
+
+- 唯一索引 `(fixed_block_id, occurrence_date)`，只约束 `deleted_at IS NULL`；同一次只保留一条有效记录。
+- 没有记录表示**未标记**，不落库；"未完成"可以用显式 `missed`，也可以按"时间已过 + 无记录"推导。
+- `exception` 整次跳过时该 occurrence 不会生成，因此不需要状态记录。
+- 查询接口会实时计算日期范围内的 occurrence，再左连接本表，返回 `status`、`log_id`、`note`、`is_past`。
+- `status=pending` 等价于"时间已过且没有 done/skipped"；`status=unmarked` 只返回无记录实例。
+
+### 3.11 软删除约定
 
 所有业务表都有 `deleted_at`：
 
@@ -312,6 +339,7 @@ VALUES (1, 5, 620, 640);
 - 父记录删除后的默认可见性：
   - 任务删除后，其 `task_schedules` 默认不返回。
   - 固定块删除后，其 `fixed_block_exceptions` 默认不返回。
+  - 固定块删除或停用后，其 occurrence 不再参与计算，状态记录也随之不再返回。
 
 ## 4. 固定块覆盖基础块的计算方式
 
@@ -449,15 +477,26 @@ WHERE memo_date BETWEEN :month_start AND :month_end AND deleted_at IS NULL
 ORDER BY memo_date;
 ```
 
-## 6. 初始化
+## 6. 初始化与迁移
+
+全新库可以手动建表：
 
 ```bash
 sqlite3 tasks-planner.db < docs/schema.sql
 ```
 
-脚本可重复执行（`IF NOT EXISTS`、`INSERT OR IGNORE`）。升级时读取 `app_meta.schema_version`，按版本顺序执行迁移。
+也可以直接启动后端：`init_db()` 会先执行迁移，再执行 `schema.sql`。
 
-> `IF NOT EXISTS` 只保证不报错，不会修改已存在表的结构。若之前用旧版脚本建过库，需要删除重建或编写迁移脚本。
+迁移机制：
+
+- `schema_migrations(version, name, applied_at)` 记录已经执行过的版本。
+- `backend/app/database.py` 里的 `MIGRATIONS` 是有序列表，启动时只执行 `version` 大于已记录最大版本的迁移。
+- 旧库没有 `schema_migrations` 时，以 `app_meta.schema_version` 为起点；如果实际结构已经是最新，就只补记录而不重复执行。
+- 数据库版本高于当前程序时拒绝启动，避免旧程序降级破坏新结构。
+- 新增版本：在 `MIGRATIONS` 追加 `Migration(n, "说明", fn)`，同时把 `schema.sql` 中 `app_meta.schema_version` 的初始值改成 `n`。
+- 每个迁移都应幂等；涉及表重建时要关闭/恢复 `PRAGMA foreign_keys`，并在事务内完成、最后执行 `PRAGMA foreign_key_check`。
+
+> `schema.sql` 只负责"当前最新结构"的幂等基线。已经存在的旧表不会因为 `IF NOT EXISTS` 自动改结构，结构变更必须写进 `MIGRATIONS`。
 
 ## 7. 后续可扩展
 

@@ -16,9 +16,19 @@ CREATE TABLE IF NOT EXISTS app_meta (
 );
 
 INSERT OR IGNORE INTO app_meta(key, value) VALUES
-  ('schema_version', '1'),
+  ('schema_version', '2'),
   ('timezone', 'Asia/Shanghai'),
   ('week_start', '1');          -- ISO: 1=周一
+
+-- ---------------------------------------------------------------------------
+-- 迁移记录：启动时只执行 version 大于已记录版本的迁移
+--   业务代码中的 MIGRATIONS 负责写入本表；schema.sql 只保证表存在
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  version    INTEGER PRIMARY KEY,
+  name       TEXT NOT NULL,
+  applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 
 -- ---------------------------------------------------------------------------
 -- 优先级表：用户可编辑；任务通过外键引用，不写死枚举
@@ -152,7 +162,8 @@ END;
 --     weekly  -> 1..7 (ISO, 1=周一)，多个星期几就建多行
 --     monthly -> 1..31，月份不存在该日则当月跳过
 --   allow_task_schedule: 是否允许在该固定块时段内添加任务排期；0 = 不允许
---   effective_from/to: 含端点，NULL = 不限制
+--   effective_from: 生效起始日期（含），必填，默认由 API/CLI 取当天
+--   effective_to:   生效结束日期（含），NULL = 不限制
 --   overlap_priority: 固定块之间冲突时的裁决（越大越优先），平时为 0
 --   不支持跨午夜，跨天请拆成两行
 -- ---------------------------------------------------------------------------
@@ -163,7 +174,7 @@ CREATE TABLE IF NOT EXISTS fixed_blocks (
   recurrence_value INTEGER,
   start_minute     INTEGER NOT NULL CHECK (start_minute BETWEEN 0 AND 1439),
   end_minute       INTEGER NOT NULL CHECK (end_minute BETWEEN 1 AND 1440),
-  effective_from   TEXT,                   -- 'YYYY-MM-DD'
+  effective_from   TEXT    NOT NULL,       -- 'YYYY-MM-DD'，必填
   effective_to     TEXT,                   -- 'YYYY-MM-DD'
   overlap_priority INTEGER NOT NULL DEFAULT 0,
   allow_task_schedule INTEGER NOT NULL DEFAULT 1 CHECK (allow_task_schedule IN (0, 1)),
@@ -225,6 +236,33 @@ CREATE INDEX IF NOT EXISTS idx_fixed_block_exceptions_block
   ON fixed_block_exceptions(fixed_block_id, effective_from, effective_to);
 CREATE INDEX IF NOT EXISTS idx_fixed_block_exceptions_date
   ON fixed_block_exceptions(skip_date);
+
+-- ---------------------------------------------------------------------------
+-- 固定块发生实例状态：记录某个固定块在某一天的实际状态
+--   occurrence_date 是具体日期，和 fixed_blocks 的重复规则无关；
+--   固定块被例外整次跳过时不会产生 occurrence，也就不需要状态。
+--   status: done=已完成，skipped=主动跳过，missed=未完成/漏掉
+--   没有记录 = 未标记；同一 (fixed_block_id, occurrence_date) 只保留一条有效记录
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS fixed_block_occurrence_logs (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  fixed_block_id  INTEGER NOT NULL REFERENCES fixed_blocks(id) ON DELETE CASCADE,
+  occurrence_date TEXT    NOT NULL
+                  CHECK (occurrence_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+  status          TEXT    NOT NULL CHECK (status IN ('done', 'skipped', 'missed')),
+  note            TEXT,
+  deleted_at      TEXT,                    -- 软删除时间（UTC），NULL = 未删除
+  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_fixed_block_occurrence_logs
+  ON fixed_block_occurrence_logs(fixed_block_id, occurrence_date)
+  WHERE deleted_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_fixed_block_occurrence_logs_date
+  ON fixed_block_occurrence_logs(occurrence_date)
+  WHERE deleted_at IS NULL;
 
 -- ---------------------------------------------------------------------------
 -- 每日备忘录：同一天可以有多条

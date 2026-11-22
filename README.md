@@ -15,10 +15,11 @@
 - 自定义优先级与任务状态（内置 `todo/doing/blocked/done/cancelled`）
 - 每日基础模板：把一天划分为可复用的时间段
 - 固定日程：按每天 / 每周 / 每月重复，支持生效区间与重叠优先级
+- 固定块追踪：记录某次固定块是完成、跳过还是未完成
 - 固定块例外：跳过某一次固定日程，或只跳过其中一段
 - 任务排期：把任务放进某天某个时间段，自动校验冲突
 - 规划视图：汇总某天的固定块、排期、模板、空闲时间与冲突
-- 未排期池：按「是否存在排期」统计，而不是靠状态维护
+- 未排期池：按「从现在起往后是否还有有效排期」统计，跳过的不算，而不是靠状态维护
 - 每日备忘录：只增不改，支持按天 / 周 / 月查询
 - 中英文界面、深浅色主题
 
@@ -180,7 +181,8 @@ CLI：
 | 状态 status | 内置 `todo/doing/blocked/done/cancelled`，可自定义，只能停用内置状态 |
 | 优先级 priority | 用户自定义，`level=1` 最高 |
 | 每日模板 day block | 每天相同的时间划分模板，全库共用一份 |
-| 固定块 fixed block | 每天 / 每周 / 每月重复的日程，优先级高于模板与排期 |
+| 固定块 fixed block | 每天 / 每周 / 每月重复的日程，优先级高于模板与排期；`effective_from` 必填，默认当天 |
+| 固定块状态 occurrence | 某次固定块的实际状态：`done` / `skipped` / `missed`，无记录表示未标记 |
 | 例外 exception | 跳过某次固定块的整段或一段 |
 | 排期 schedule | 把任务放入某天某个时间段，状态 `planned/done/skipped` |
 | 规划视图 plan day | 汇总某天的固定块、排期、模板、空闲时间与冲突 |
@@ -199,6 +201,7 @@ CLI：
 | `/api/day-blocks` | 每日基础模板 |
 | `/api/fixed-blocks` | 固定块 |
 | `/api/fixed-blocks/{id}/exceptions`、`/api/fixed-block-exceptions` | 固定块例外 |
+| `/api/fixed-block-occurrences` | 固定块发生实例状态，支持列出已过且未完成的实例 |
 | `/api/task-schedules` | 任务排期，写入时校验冲突 |
 | `/api/memos` | 每日备忘录，只增与查询 |
 | `/api/plan/fixed-occurrences` | 计算某天实际发生的固定块 |
@@ -212,6 +215,7 @@ CLI：
 - 日期使用本地日期字符串 `YYYY-MM-DD`
 - 时间戳以 UTC 存储，输出时按 `app_meta.timezone` 转为本地时间
 - 业务数据均为软删除，可通过 `restore` 接口恢复
+- 启动时自动执行 `schema_migrations` 中尚未记录的迁移，旧库无需手动改表
 - SQLite 使用 WAL 模式，每个连接开启外键约束
 
 详细设计见 [`docs/database.md`](docs/database.md)，建表脚本见 [`docs/schema.sql`](docs/schema.sql)。
@@ -259,14 +263,14 @@ docker run --rm -p 56649:56649 -v tasks-planner-data:/data tasks-planner
 
 ```bash
 curl http://127.0.0.1:56649/api/health
-# {"status":"ok","version":"0.1.0"}
+# {"status":"ok","version":"0.2.0"}
 ```
 
 推送 `v*` tag 会触发 [`.github/workflows/release.yml`](.github/workflows/release.yml)，自动构建前端、生成压缩包并创建 GitHub Release：
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 ## 文档
