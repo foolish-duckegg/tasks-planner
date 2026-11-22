@@ -263,14 +263,14 @@ docker run --rm -p 56649:56649 -v tasks-planner-data:/data tasks-planner
 
 ```bash
 curl http://127.0.0.1:56649/api/health
-# {"status":"ok","version":"0.1.0"}
+# {"status":"ok","version":"0.2.0"}
 ```
 
 推送 `v*` tag 会触发 [`.github/workflows/release.yml`](.github/workflows/release.yml)，自动构建前端、生成压缩包并创建 GitHub Release：
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 ## 文档

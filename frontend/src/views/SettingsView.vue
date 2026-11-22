@@ -252,7 +252,7 @@ onMounted(load)
         <section class="surface-card">
           <div class="section-title">
             <h3>{{ t('settings.general') }}</h3>
-            <span class="pill">{{ t('app.version') }} 0.1.0</span>
+            <span class="pill">{{ t('app.version') }} 0.2.0</span>
           </div>
 
           <el-form label-position="top" class="settings-form">
@@ -473,7 +473,7 @@ onMounted(load)
           <section class="surface-card about-card">
             <span class="tiny-label">{{ t('settings.schemaVersion') }}</span>
             <strong class="about-number">{{ schemaVersion }}</strong>
-            <small>{{ t('app.version') }} 0.1.0</small>
+            <small>{{ t('app.version') }} 0.2.0</small>
           </section>
 
           <section class="surface-card about-card about-note">

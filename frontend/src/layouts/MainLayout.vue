@@ -142,7 +142,7 @@ onMounted(async () => {
           <span class="health-dot" />
           <span class="nav-label">{{ healthText }}</span>
         </div>
-        <div class="version nav-label">{{ t('app.version') }} 0.1.0</div>
+        <div class="version nav-label">{{ t('app.version') }} 0.2.0</div>
       </div>
     </aside>
 

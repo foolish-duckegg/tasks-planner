@@ -3,7 +3,7 @@
   "info": {
     "title": "tasks-planner API",
     "description": "本地任务与时间规划服务。\n\n约定：时间点使用距离 00:00 的分钟数（0..1440），区间为左闭右开；日期使用 YYYY-MM-DD；时间戳以 UTC 存储，响应时按 app_meta.timezone 转为本地时间。删除均为软删除。",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "paths": {
     "/api/health": {
