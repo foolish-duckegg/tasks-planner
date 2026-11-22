@@ -166,7 +166,8 @@ def list_tasks(
     response_model=list[TaskOut],
     summary="列出未排期任务",
     description=(
-        "未排期任务指没有任何未删除任务排期的任务，与任务状态无关。"
+        "未排期任务指从现在起往后没有任何未删除、未跳过的任务排期："
+        "过去的排期和 skipped 的排期都不算，今天尚未结束的有效排期算。"
         "默认排除已完成、已取消的任务，支持优先级、关键词和截止时间筛选。"
     ),
 )
@@ -183,6 +184,10 @@ def list_unscheduled_tasks(
     conn: sqlite3.Connection = Depends(get_db),
 ) -> list[dict]:
     tz = get_timezone(conn)
+    now = datetime.now(tz)
+    today = now.date().isoformat()
+    now_minute = now.hour * 60 + now.minute
+
     where, params = _task_filters(
         status_code=None,
         priority_level_id=priority_level_id,
@@ -195,9 +200,14 @@ def list_unscheduled_tasks(
     where.append(
         "NOT EXISTS ("
         "SELECT 1 FROM task_schedules ts "
-        "WHERE ts.task_id = t.id AND ts.deleted_at IS NULL"
+        "WHERE ts.task_id = t.id "
+        "AND ts.deleted_at IS NULL "
+        "AND ts.status <> 'skipped' "
+        "AND (ts.plan_date > ? OR "
+        "(ts.plan_date = ? AND ts.end_minute > ?))"
         ")"
     )
+    params.extend([today, today, now_minute])
     placeholders = ", ".join("?" for _ in CLOSED_STATUS_CODES)
     where.append(f"s.code NOT IN ({placeholders})")
     params.extend(CLOSED_STATUS_CODES)

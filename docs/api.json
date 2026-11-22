@@ -915,7 +915,7 @@
           "tasks"
         ],
         "summary": "列出未排期任务",
-        "description": "未排期任务指没有任何未删除任务排期的任务，与任务状态无关。默认排除已完成、已取消的任务，支持优先级、关键词和截止时间筛选。",
+        "description": "未排期任务指从现在起往后没有任何未删除、未跳过的任务排期：过去的排期和 skipped 的排期都不算，今天尚未结束的有效排期算。默认排除已完成、已取消的任务，支持优先级、关键词和截止时间筛选。",
         "operationId": "list_unscheduled_tasks_api_tasks_unscheduled_get",
         "parameters": [
           {

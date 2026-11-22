@@ -1057,7 +1057,14 @@ def build_parser() -> argparse.ArgumentParser:
     task_list.add_argument("--all", action="store_true", help="包含软删除")
     task_list.add_argument("--limit", type=int, default=100)
     task_list.add_argument("--offset", type=int, default=0)
-    task_unscheduled = task_sub.add_parser("unscheduled", help="列出未排期任务")
+    task_unscheduled = task_sub.add_parser(
+        "unscheduled",
+        help="列出从现在起往后没有有效排期的任务",
+        description=(
+            "未排期任务：从现在起往后没有未删除、未跳过的排期，"
+            "且任务状态不是 done/cancelled。"
+        ),
+    )
     task_unscheduled.add_argument(
         "--priority", action="append", help="优先级 id/level/name，可重复传多个（OR）"
     )

@@ -107,6 +107,8 @@ tp task restore ID
 
 `--open` 在客户端过滤掉 `done` 与 `cancelled`。
 
+`task unscheduled` 只返回从现在起往后没有任何有效排期的非 `done/cancelled` 任务；过去的排期和 `skipped` 的排期都不算。
+
 ### 每日基础模板（day blocks）
 
 ```bash
